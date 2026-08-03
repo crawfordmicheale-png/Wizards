@@ -44,6 +44,7 @@
       this._scratchIdx = 0;
 
       this.cam = { x: 0, y: 0 };
+      this.curse = C.curseDefaults();     // replaced per run in start()
       this.groundPattern = this.ctx.createPattern(Art.ground, 'repeat');
 
       this.resize();
@@ -117,6 +118,7 @@
         if (first) first.classList.add('sel');
       }
       $('vaultGold').textContent = Save.data.shards + ' ✦';
+      $('curseTag').textContent = this.curseTag();
     },
 
     bindUI() {
@@ -124,6 +126,13 @@
       $('btnHelp').onclick = () => { $('help').classList.remove('hidden'); $('title').classList.add('hidden'); };
       $('btnHelpBack').onclick = () => { $('help').classList.add('hidden'); $('title').classList.remove('hidden'); };
       $('btnVault').onclick = () => { this.openVault(); };
+      $('btnCurses').onclick = () => { this.openCurses(); };
+      $('btnCursesBack').onclick = () => {
+        $('curses').classList.add('hidden'); $('title').classList.remove('hidden'); this.buildMenu();
+      };
+      $('btnCursesClear').onclick = () => {
+        Save.data.curses = []; Save.save(); this.audio('choose'); this.openCurses();
+      };
       $('btnVaultBack').onclick = () => { $('vault').classList.add('hidden'); $('title').classList.remove('hidden'); this.buildMenu(); };
       $('btnWipe').onclick = () => {
         if (confirm('Erase all Vault progress and records?')) { Save.wipe(); this.openVault(); this.buildMenu(); }
@@ -189,6 +198,62 @@
                        `These blessings persist across every run.`;
     },
 
+    /* ---------------- Curses ---------------- */
+    activeCurses() {
+      const ids = Save.data.curses || [];
+      return C.curses.filter((c) => ids.includes(c.id));
+    },
+
+    curseTag() {
+      const on = this.activeCurses();
+      if (!on.length) return 'none';
+      const bonus = Math.round(on.reduce((n, c) => n + c.shard, 0) * 100);
+      return `${on.length} · +${bonus}% ✦`;
+    },
+
+    openCurses() {
+      $('title').classList.add('hidden');
+      $('curses').classList.remove('hidden');
+      const ids = Save.data.curses || [];
+      const grid = $('curseGrid');
+      grid.innerHTML = '';
+      for (const c of C.curses) {
+        const on = ids.includes(c.id);
+        const el = document.createElement('div');
+        el.className = 'vault-item curse' + (on ? ' on' : '');
+        const head = document.createElement('div');
+        head.className = 'vhead';
+        head.appendChild(this.iconNode(c.icon, 26));
+        const nm = document.createElement('div');
+        nm.className = 'vname';
+        nm.innerHTML = `<span>${c.name}</span>`;
+        head.appendChild(nm);
+        const mark = document.createElement('div');
+        mark.className = 'curse-mark';
+        head.appendChild(mark);
+        el.appendChild(head);
+        const body = document.createElement('div');
+        body.innerHTML = `<div class="vdesc">${c.desc}</div>` +
+                         `<div class="vpay">+${Math.round(c.shard * 100)}% soul shards</div>`;
+        el.appendChild(body);
+        el.onclick = () => {
+          const list = Save.data.curses || (Save.data.curses = []);
+          const i = list.indexOf(c.id);
+          if (i >= 0) list.splice(i, 1); else list.push(c.id);
+          Save.save();
+          this.audio('choose');
+          this.openCurses();
+        };
+        grid.appendChild(el);
+      }
+      const on = this.activeCurses();
+      const bonus = Math.round(on.reduce((n, c) => n + c.shard, 0) * 100);
+      $('curseSub').innerHTML = on.length
+        ? `<b style="color:var(--rose)">${on.length}</b> curse${on.length > 1 ? 's' : ''} bound &mdash; ` +
+          `payout <b style="color:var(--gold)">+${bonus}%</b>. They apply to every run until lifted.`
+        : 'Make the night worse. Get paid for it. Curses stay bound until you lift them.';
+    },
+
     toMenu() {
       this.state = 'menu';
       Audio_.stopMusic();
@@ -221,7 +286,8 @@
       this.bosses.length = 0;
       FX.reset();
 
-      this.player = new W.Player(def, this.metaStats());
+      this.curse = C.curseMods(Save.data.curses);
+      this.player = new W.Player(def, this.metaStats(), this.curse);
       this.time = 0;
       this.kills = 0;
       this.shards = 0;
@@ -238,6 +304,7 @@
 
       $('title').classList.add('hidden');
       $('vault').classList.add('hidden');
+      $('curses').classList.add('hidden');
       $('help').classList.add('hidden');
       $('over').classList.add('hidden');
       $('hud').classList.remove('hidden');
@@ -248,7 +315,9 @@
       this.state = 'play';
       Audio_.resume();
       Audio_.startMusic();
-      this.banner('SURVIVE UNTIL DAWN', '#c9a8ff');
+      const bound = this.activeCurses();
+      this.banner(bound.length ? `${bound.length} CURSE${bound.length > 1 ? 'S' : ''} BOUND` : 'SURVIVE UNTIL DAWN',
+                  bound.length ? '#ff6b8f' : '#c9a8ff');
       Save.data.runs++; Save.save();
     },
 
@@ -392,12 +461,12 @@
     director(dt) {
       const m = this.time / 60;
       const scale = this.difficulty();
-      this.bulletDmgMul = scale.dmg;
+      this.bulletDmgMul = scale.dmg * this.curse.bulletDmg;
 
       // --- steady trickle -----------------------------------
       const alive = this.enemyPool.active.length;
-      const target = Math.min(300, 24 + m * 14);
-      const rate = alive > 420 ? 0 : clamp((target - alive) * 0.55, 0, 34);
+      const target = Math.min(300, 24 + m * 14) * this.curse.spawnRate;
+      const rate = alive > 460 ? 0 : clamp((target - alive) * 0.55, 0, 34 * this.curse.spawnRate);
       this.spawnAcc += rate * dt;
       while (this.spawnAcc >= 1) {
         this.spawnAcc -= 1;
@@ -423,9 +492,10 @@
       }
 
       // --- bosses -------------------------------------------
-      while (this.bossIdx < C.bossSchedule.length && this.time >= C.bossSchedule[this.bossIdx].at) {
+      while (this.bossIdx < C.bossSchedule.length &&
+             this.time >= C.bossSchedule[this.bossIdx].at * this.curse.bossTime) {
         const b = C.bossSchedule[this.bossIdx++];
-        this.spawnBoss(b.id, b.mult || 1, scale);
+        this.spawnBoss(b.id, (b.mult || 1) * this.curse.bossPower, scale);
       }
       // Past the schedule, keep escalating.
       if (this.bossIdx >= C.bossSchedule.length && this.time > 870 && !this.activeBoss) {
@@ -593,7 +663,7 @@
       // Hard ceiling: past this the screen is unreadable anyway, and
       // dropping the newest shot is kinder than dropping frames.
       if (this.bulletPool.active.length >= 850) return;
-      this.bulletPool.spawn().init(x, y, a, spd, dmg, color);
+      this.bulletPool.spawn().init(x, y, a, spd * this.curse.bulletSpd, dmg, color);
     },
     spawnZone(o) { this.zonePool.spawn().init(o); },
     spawnMeteor(o) { this.meteorPool.spawn().init(o); },
@@ -1018,7 +1088,7 @@
 
     playerDown() {
       const p = this.player;
-      if (p.revives > 0) {
+      if (p.revives > 0 && !this.curse.noRevive) {
         p.revives--;
         p.hp = p.maxhp;
         p.iframe = 2.6;
@@ -1050,7 +1120,8 @@
       $('pause').classList.add('hidden');
       $('bossBarWrap').classList.add('hidden');
 
-      const earned = Math.round(this.shards + this.kills * 0.32 * this.player.stat.shardBonus);
+      const base = this.shards + this.kills * 0.32 * this.player.stat.shardBonus;
+      const earned = Math.round(base * (1 + this.curse.shardBonus));
       const s = Save.data;
       s.shards += earned;
       s.kills += this.kills;
@@ -1066,12 +1137,16 @@
         : abandoned ? 'The vigil is abandoned. The shards are yours to keep.'
         : `You fell at ${fmtTime(this.time)}. The night goes on without you.`;
 
+      const bound = this.activeCurses();
       $('results').innerHTML =
         res(fmtTime(this.time), 'Survived') +
         res(this.kills, 'Slain') +
         res('Lv ' + this.player.level, 'Reached') +
         res(earned + ' ✦', 'Shards Earned', true) +
-        res(fmtTime(s.best), 'Best Ever');
+        (bound.length
+          ? `<div class="res curse"><div class="rv">+${Math.round(this.curse.shardBonus * 100)}%</div>` +
+            `<div class="rk">${bound.length} Curse${bound.length > 1 ? 's' : ''}</div></div>`
+          : res(fmtTime(s.best), 'Best Ever'));
 
       $('over').classList.remove('hidden');
       $('touch').classList.add('hidden');
@@ -1322,12 +1397,31 @@
 
     drawVignette(g, w, h) {
       const p = this.player;
-      const grd = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.34,
-                                         w / 2, h / 2, Math.max(w, h) * 0.72);
+      // Creeping Fog pulls the dark in hard and leaves only a small
+      // pool of sight around the player.
+      const fog = this.curse.fog;
+      const inner = Math.min(w, h) * (fog ? 0.10 : 0.34);
+      const outer = Math.max(w, h) * (fog ? 0.40 : 0.72);
+      const grd = g.createRadialGradient(w / 2, h / 2, inner, w / 2, h / 2, outer);
       grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(1, 'rgba(0,0,0,0.62)');
+      grd.addColorStop(1, fog ? 'rgba(0,0,0,0.97)' : 'rgba(0,0,0,0.62)');
       g.fillStyle = grd;
       g.fillRect(0, 0, w, h);
+      if (fog) {
+        // Drifting murk, so the edge of vision is not a static ring.
+        g.globalCompositeOperation = 'multiply';
+        for (let i = 0; i < 3; i++) {
+          const t = this.time * 0.06 + i * 2.1;
+          const gx = w / 2 + Math.cos(t) * w * 0.22;
+          const gy = h / 2 + Math.sin(t * 1.3) * h * 0.22;
+          const g2 = g.createRadialGradient(gx, gy, 0, gx, gy, Math.min(w, h) * 0.42);
+          g2.addColorStop(0, 'rgba(120,120,150,1)');
+          g2.addColorStop(1, 'rgba(255,255,255,1)');
+          g.fillStyle = g2;
+          g.fillRect(0, 0, w, h);
+        }
+        g.globalCompositeOperation = 'source-over';
+      }
 
       // Blood haze when the player is nearly gone
       const hurt = 1 - clamp(p.hp / p.maxhp, 0, 1);

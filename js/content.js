@@ -538,6 +538,85 @@
   C.RUN_LENGTH = 900;   // 15:00 — survive to see dawn
 
   /* =========================================================
+     CURSES — opt-in handicaps taken before a run. Each one
+     makes the night worse and pays out more soul shards, so
+     the player sets their own difficulty and gets paid for it.
+
+     Every curse is expressed as a multiplier on a value the
+     engine already reads, which is why none of them need
+     special-case logic at the point of use.
+     ========================================================= */
+  C.curseDefaults = () => ({
+    spawnRate: 1,     // director pressure
+    maxhp: 1,
+    damage: 1,        // damage you deal
+    dmgTaken: 1,
+    speed: 1,
+    xp: 1,
+    bulletSpd: 1,     // hostile projectiles
+    bulletDmg: 1,
+    bossTime: 1,      // schedule multiplier: < 1 means they wake sooner
+    bossPower: 1,
+    gemLife: 0,       // seconds before loose essence rots; 0 = never
+    fog: 0,
+    noRevive: false,
+    shardBonus: 0,    // additive across every curse taken
+  });
+
+  C.curses = [
+    { id: 'swarm',    name: 'Swarm',            icon: 'cat',       shard: 0.25,
+      desc: 'The hollow sends far more of everything.',
+      apply: (m) => { m.spawnRate *= 1.55; } },
+
+    { id: 'frailty',  name: 'Frailty',          icon: 'amulet',    shard: 0.20,
+      desc: 'Your body is thinner than it was. −30% maximum health.',
+      apply: (m) => { m.maxhp *= 0.70; } },
+
+    { id: 'glass',    name: 'Glass Heart',      icon: 'might',     shard: 0.30,
+      desc: 'You strike far harder — and so does everything else.',
+      apply: (m) => { m.damage *= 1.6; m.dmgTaken *= 1.8; } },
+
+    { id: 'hunger',   name: 'Hunger',           icon: 'lodestone', shard: 0.25,
+      desc: 'Essence rots if you leave it lying. Collect it or lose it.',
+      apply: (m) => { m.gemLife = 8; } },
+
+    { id: 'fog',      name: 'Creeping Fog',     icon: 'lens',      shard: 0.20,
+      desc: 'The dark presses closer. You see much less of it coming.',
+      apply: (m) => { m.fog = 1; } },
+
+    { id: 'wardens',  name: 'Restless Wardens', icon: 'feather',   shard: 0.30,
+      desc: 'The Wardens wake early, and angrier.',
+      apply: (m) => { m.bossTime *= 0.75; m.bossPower *= 1.45; } },
+
+    { id: 'leadfoot', name: 'Leadfoot',         icon: 'boots',     shard: 0.25,
+      desc: 'Your feet drag. −18% movement speed.',
+      apply: (m) => { m.speed *= 0.82; } },
+
+    { id: 'barrage',  name: 'Barrage',          icon: 'ward',      shard: 0.30,
+      desc: 'Their spells fly faster and land heavier.',
+      apply: (m) => { m.bulletSpd *= 1.4; m.bulletDmg *= 1.35; } },
+
+    { id: 'famine',   name: 'Famine',           icon: 'grimoire',  shard: 0.30,
+      desc: 'Essence yields far less. You will level slowly.',
+      apply: (m) => { m.xp *= 0.65; } },
+
+    { id: 'brittle',  name: 'Brittle Soul',     icon: 'moonstone', shard: 0.25,
+      desc: 'Nothing brings you back. Revivals do not work.',
+      apply: (m) => { m.noRevive = true; } },
+  ];
+
+  /** Fold a list of curse ids into a single modifier object. */
+  C.curseMods = function (ids) {
+    const m = C.curseDefaults();
+    for (const c of C.curses) {
+      if (!ids || !ids.includes(c.id)) continue;
+      c.apply(m);
+      m.shardBonus += c.shard;
+    }
+    return m;
+  };
+
+  /* =========================================================
      VAULT (persistent meta upgrades)
      ========================================================= */
   C.vault = [

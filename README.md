@@ -42,6 +42,31 @@ is the only thing enemy bullets can hit. Enemy *bodies* still hurt on contact.
 Soul shards persist. Spend them in **The Coven Vault** on permanent upgrades —
 that's the intended path from "died at six minutes" to actually seeing dawn.
 
+## Curses
+
+Ten optional handicaps, bound from the title screen and kept until you lift
+them. Each makes the run harder and raises the shard payout; they stack, up to
++260%.
+
+| Curse | Effect | Payout |
+| --- | --- | --- |
+| Swarm | Far more of everything | +25% |
+| Frailty | −30% maximum health | +20% |
+| Glass Heart | You deal +60%, take +80% | +30% |
+| Hunger | Essence rots where it falls, and no longer drifts to you | +25% |
+| Creeping Fog | The dark closes in; you see much less coming | +20% |
+| Restless Wardens | Bosses wake 25% sooner and hit far harder | +30% |
+| Leadfoot | −18% movement speed | +25% |
+| Barrage | Hostile spells fly 40% faster and hit 35% harder | +30% |
+| Famine | −35% essence gained | +30% |
+| Brittle Soul | Revivals do not work | +25% |
+
+Every curse is a multiplier on a value the engine already reads, so none of them
+needed special-case logic at the point of use. Hunger is the exception worth
+knowing about: loose essence normally drifts after you once it is a few seconds
+old, which would have swept up every gem before it could rot — so that curse
+switches the drift off, and you have to go and collect.
+
 ## Characters
 
 | | Starts with | Bonus |
@@ -102,11 +127,18 @@ falls back to a system Chromium so it still runs, and prints a warning saying
 exact counts will differ. Every assertion is a range rather than a golden value,
 so both paths pass.
 
-It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
-evolution reference in `content.js` actually resolves; a four-minute run with a
-kiting bot; far-enemy recycling; a full 15-minute *pacifist* run (no spells at
-all — the case that once spiralled); every spell in its evolved form; every
-enemy AI branch and boss attack pattern; and each UI surface.
+It covers: boot and asset generation; self-verified determinism; that every
+sprite, icon, spawn-table and evolution reference in `content.js` actually
+resolves; a four-minute run with a kiting bot; far-enemy recycling; a full
+15-minute *pacifist* run (no spells at all — the case that once spiralled);
+every spell in its evolved form; every enemy AI branch and boss attack pattern;
+every curse; and each UI surface.
+
+Curses are checked for measurable effect, not mere existence — Hunger has to
+actually cost the bot levels, Restless Wardens has to actually spawn a boss
+earlier. Where a curse has no aggregate signal (Barrage changes projectile
+speed; Brittle Soul changes a death rule) it gets a direct probe instead of a
+statistic that might drift on its own.
 
 Every major guard was validated by mutation rather than assumed to work:
 deleting the despawn line takes the pacifist crowd from 248 to 1448; scaling all

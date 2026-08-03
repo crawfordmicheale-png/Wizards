@@ -410,6 +410,104 @@ async function main() {
   check('bosses take damage', zoo.kills >= 0 && zoo.spawned > 0,
         `${zoo.spawned} mobs, ${zoo.bosses} bosses left`);
 
+  /* ---------- 5b. curses ----------
+     Each curse must measurably change the run. Where a curse has no
+     aggregate signal (it changes projectile speed, or a death rule)
+     it gets a direct probe instead of a statistic that might happen
+     to move on its own.                                          */
+  errors.length = 0;
+  const curse = await page.evaluate(() => {
+    const G = W.Game;
+
+    const runCurse = (ids, secs) => {
+      W.Save.data.curses = ids;
+      W.Save.data.meta = {};                 // no vault, so effects stay visible
+      window.__seed(0x5EED10);
+      G.selectedChar = 'ember';
+      G.start();
+      window.__h.takeOver();
+      const p = G.player;
+      const r = window.__h.run(60 * secs);
+      return { ...r, maxhp: p.maxhp, dmg: +p.stat.damage.toFixed(3),
+               speed: Math.round(p.baseSpeed), shard: G.curse.shardBonus,
+               bosses: G.bosses.length };
+    };
+
+    // 130s: past the first Warden under the Restless curse (150s x 0.75)
+    // but before it on a clean run, which is the difference we assert.
+    const base = runCurse([], 130);
+    const each = {};
+    for (const c of W.Content.curses) each[c.id] = runCurse([c.id], 130);
+    const stacked = runCurse(W.Content.curses.map((c) => c.id), 60);
+
+    const probe = {};
+
+    // Barrage changes projectile speed, not projectile count — a count
+    // would be the wrong thing to assert, and could move either way.
+    const shotSpeed = (ids) => {
+      W.Save.data.curses = ids;
+      G.start();
+      G.bulletPool.clear();
+      G.spawnBullet(0, 0, 0, 100, 5, 'void');
+      return Math.round(G.bulletPool.active[0].vx);
+    };
+    probe.shotBase = shotSpeed([]);
+    probe.shotBarrage = shotSpeed(['barrage']);
+
+    // Brittle Soul must actually suppress a revive that would otherwise fire.
+    const dieHolding = (ids) => {
+      W.Save.data.curses = ids;
+      G.start();
+      G.state = 'play';
+      const p = G.player;
+      p.revives = 3;
+      p.hp = 1;
+      G.playerDown();
+      const out = { state: G.state, revives: p.revives };
+      document.getElementById('over').classList.add('hidden');
+      return out;
+    };
+    probe.dieBase = dieHolding([]);
+    probe.dieBrittle = dieHolding(['brittle']);
+
+    // Creeping Fog only changes rendering, so prove it renders.
+    W.Save.data.curses = ['fog'];
+    G.start();
+    window.__h.takeOver();
+    window.__h.run(60 * 3, { render: true });
+    G.render();
+
+    W.Save.data.curses = [];
+    return { base, each, stacked, probe };
+  });
+  check('curses run clean', errors.length === 0, errors[0] || '');
+
+  {
+    const b = curse.base, e = curse.each, pr = curse.probe;
+    check('Swarm raises pressure', e.swarm.maxEnemies > b.maxEnemies * 1.15,
+          `${b.maxEnemies} -> ${e.swarm.maxEnemies}`);
+    check('Frailty cuts health', e.frailty.maxhp < b.maxhp * 0.8,
+          `${b.maxhp} -> ${e.frailty.maxhp}`);
+    check('Glass Heart raises damage', e.glass.dmg > b.dmg * 1.4, `${b.dmg} -> ${e.glass.dmg}`);
+    check('Hunger rots essence', e.hunger.level < b.level, `lv ${b.level} -> ${e.hunger.level}`);
+    check('Leadfoot slows you', e.leadfoot.speed < b.speed * 0.9,
+          `${b.speed} -> ${e.leadfoot.speed}`);
+    check('Famine starves progress', e.famine.level < b.level, `lv ${b.level} -> ${e.famine.level}`);
+    check('Restless Wardens wake early', e.wardens.bosses > 0 && b.bosses === 0,
+          `bosses at 130s: ${b.bosses} -> ${e.wardens.bosses}`);
+    check('Barrage speeds hostile fire', pr.shotBarrage > pr.shotBase * 1.3,
+          `${pr.shotBase} -> ${pr.shotBarrage} px/s`);
+    check('Brittle Soul suppresses revival',
+          pr.dieBase.state !== 'over' && pr.dieBrittle.state === 'over',
+          `clean=${pr.dieBase.state}, brittle=${pr.dieBrittle.state}`);
+    check('Creeping Fog renders', errors.length === 0, errors[0] || '');
+    check('every curse pays out', Object.values(e).every((r) => r.shard > 0), 'all > 0');
+    check('curses stack their payout', curse.stacked.shard > 2,
+          `+${Math.round(curse.stacked.shard * 100)}%`);
+    check('all curses at once still runs', curse.stacked.time > 0,
+          `t=${curse.stacked.time}s`);
+  }
+
   /* ---------- 6. UI surfaces ---------- */
   errors.length = 0;
   const ui = await page.evaluate(() => {
