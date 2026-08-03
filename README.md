@@ -88,12 +88,16 @@ it runs one scenario twice from the same seed and compares results, and it
 asserts no scenario leaves a pending timer behind.
 
 Both exist because *asynchronous* consumers of `Math.random` are easy to
-reintroduce and drain entropy at a rate set by wall-clock speed, so a fast
-machine quietly disagrees with a slow one. The music scheduler was one such
-consumer; the deferred level-up card was another. Note the thresholds below are
-deliberately ranges rather than exact values — `Math.sin` and friends are not
-guaranteed bit-identical across V8 versions, so asserting golden numbers would
-trade one source of flake for another.
+reintroduce and drain entropy at a rate set by wall-clock speed. The music
+scheduler was one such consumer; the deferred level-up card was another.
+
+Scope of that guarantee, stated precisely: results are reproducible **on a given
+machine**, and the checks verify that. They are *not* bit-identical across
+machines — a long run reports a peak crowd of 248 here and 244 on CI, stably on
+each side. The cause has not been isolated. Every assertion is therefore a range
+rather than a golden value, which absorbs the difference; the suite prints a
+browser and floating-point fingerprint at startup so a local-vs-CI discrepancy
+can be diagnosed from the logs rather than guessed at.
 
 It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
 evolution reference in `content.js` actually resolves; a four-minute run with a

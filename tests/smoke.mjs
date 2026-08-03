@@ -3,8 +3,9 @@
 
    Boots the real page in Chromium and drives the real update
    loop. Math.random is replaced with a seeded PRNG before any
-   game code runs, so every scenario is reproducible and CI does
-   not flake.
+   game code runs, so scenarios are reproducible on a given
+   machine. Results are not bit-identical across machines, so
+   every assertion is a range rather than a golden value.
 
    Run with:  npm test
    ============================================================ */
@@ -204,6 +205,21 @@ async function main() {
 
   await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
   await page.waitForTimeout(400);
+
+  /* Environment fingerprint. Simulation results are reproducible on a
+     given machine but have been observed to differ slightly between
+     machines; printing this makes a local-vs-CI discrepancy diagnosable
+     from the logs instead of guesswork. */
+  const env = await page.evaluate(() => ({
+    ua: navigator.userAgent.replace(/^.*(Chrome\/[\d.]+).*$/, '$1'),
+    view: `${innerWidth}x${innerHeight}@${devicePixelRatio}`,
+    spawnRadius: W.Game.spawnRadius,
+    math: [Math.sin(1e6), Math.cos(0.7), Math.hypot(3.3, 4.7),
+           Math.pow(1.1, 17), Math.atan2(0.3, 0.7), Math.exp(1.5)]
+      .map((n) => n.toPrecision(17)).join(','),
+  }));
+  console.log(`\x1b[90menv  ${env.ua}  ${env.view}  spawnR=${env.spawnRadius}\x1b[0m`);
+  console.log(`\x1b[90mmath ${env.math}\x1b[0m\n`);
 
   /* ---------- 1. boot ---------- */
   const boot = await page.evaluate(() => ({
