@@ -143,11 +143,14 @@ resolves; a four-minute run with a kiting bot; far-enemy recycling; a full
 every spell in its evolved form; every enemy AI branch and boss attack pattern;
 every curse; and each UI surface.
 
-Curses are checked for measurable effect, not mere existence — Hunger has to
-actually cost the bot levels, Restless Wardens has to actually spawn a boss
-earlier. Where a curse has no aggregate signal (Barrage changes projectile
-speed; Brittle Soul changes a death rule) it gets a direct probe instead of a
-statistic that might drift on its own.
+Curses are checked for measurable effect, not mere existence — Swarm has to
+actually raise the crowd, Restless Wardens has to actually spawn a boss earlier.
+Where a curse changes a mechanism rather than a statistic it gets a direct probe
+instead: Barrage is asserted on projectile velocity, Brittle Soul by holding
+three revives and confirming death still ends the run, Hunger by watching a
+single gem expire. Those are preferred wherever available, because an emergent
+statistic can move for reasons unrelated to the change — a first draft of the
+Barrage check asserted bullet *count* and passed vacuously at 0 to 0.
 
 Every major guard was validated by mutation rather than assumed to work:
 deleting the despawn line takes the pacifist crowd from 248 to 1448; scaling all
