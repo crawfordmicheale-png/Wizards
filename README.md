@@ -83,11 +83,17 @@ npm test
 
 `tests/smoke.mjs` boots the real page in headless Chromium and drives the real
 update loop — there is no mock game. `Math.random` is replaced with a seeded
-PRNG before any game script runs, and the suite asserts its own determinism by
-running one scenario twice from the same seed and comparing results. That check
-exists because it is easy to reintroduce an *asynchronous* consumer of
-`Math.random` — the music scheduler was one — which drains entropy at a rate set
-by wall-clock speed and quietly makes a fast machine disagree with a slow one.
+PRNG before any game script runs, and the suite guards that seeding two ways:
+it runs one scenario twice from the same seed and compares results, and it
+asserts no scenario leaves a pending timer behind.
+
+Both exist because *asynchronous* consumers of `Math.random` are easy to
+reintroduce and drain entropy at a rate set by wall-clock speed, so a fast
+machine quietly disagrees with a slow one. The music scheduler was one such
+consumer; the deferred level-up card was another. Note the thresholds below are
+deliberately ranges rather than exact values — `Math.sin` and friends are not
+guaranteed bit-identical across V8 versions, so asserting golden numbers would
+trade one source of flake for another.
 
 It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
 evolution reference in `content.js` actually resolves; a four-minute run with a

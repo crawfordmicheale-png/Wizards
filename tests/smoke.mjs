@@ -118,7 +118,20 @@ function installHelpers() {
       const cs = G.pendingCards;
       if (!cs || !cs.length) { G.state = 'play'; return; }
       const up = cs.filter((c) => !/^New/.test(c.tag));
-      G.chooseCard((up.length ? up : cs)[0]);
+
+      /* chooseCard defers the next queued card by 90ms so the modal can
+         animate. Inside a synchronous scenario that timer cannot fire, so
+         it lands in the gap between scenarios instead — where it re-rolls
+         cards and draws from the seeded stream, shifting every later
+         scenario by an amount that depends on wall-clock timing. Run the
+         follow-up inline so nothing is left pending. */
+      const realSetTimeout = window.setTimeout;
+      window.setTimeout = (fn) => { fn(); return 0; };
+      try {
+        G.chooseCard((up.length ? up : cs)[0]);
+      } finally {
+        window.setTimeout = realSetTimeout;
+      }
     },
 
     /** Step the real update loop, tracking peak load. */
@@ -139,6 +152,9 @@ function installHelpers() {
         time: Math.floor(G.time), state: G.state, level: p.level, kills: G.kills,
         hp: Math.round(p.hp), maxEnemies, maxBullets, levelUps,
         spells: p.spells.length,
+        // Sampled here, synchronously: a timer with a short delay would
+        // otherwise fire during the round-trip out to the test runner.
+        pending: window.__pendingTimers(),
       };
     },
   };
@@ -166,6 +182,24 @@ async function main() {
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+
+    /* Track outstanding timers. A scenario that ends with one pending
+       leaks it into the gap before the next scenario, where it runs
+       game code and draws from the seeded stream — the exact shape of
+       cross-machine drift. Asserting the count is zero catches that at
+       the source, rather than hoping a scenario happens to expose it. */
+    const realSet = window.setTimeout, realClear = window.clearTimeout;
+    const pending = new Set();
+    window.setTimeout = function (fn, ms, ...rest) {
+      const id = realSet.call(window, function () {
+        pending.delete(id);
+        return typeof fn === 'function' ? fn.apply(this, arguments) : undefined;
+      }, ms, ...rest);
+      pending.add(id);
+      return id;
+    };
+    window.clearTimeout = function (id) { pending.delete(id); return realClear.call(window, id); };
+    window.__pendingTimers = () => pending.size;
   });
 
   await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
@@ -217,15 +251,21 @@ async function main() {
      Math.random() — a scheduler, a timer, an animation callback —
      drifts the second result and fails here, which is what keeps
      the thresholds below from flaking on a faster machine. */
+  await page.evaluate(() => {
+    W.Game.start(); window.__h.takeOver(); window.__seed(0x1234567);
+    window.__detA = window.__h.run(60 * 90);
+  });
+  await page.evaluate(() => {
+    W.Game.start(); window.__h.takeOver(); window.__seed(0x1234567);
+  });
+  // Deliberate gap *after* reseeding: a timer left pending by run A fires
+  // here and draws from the fresh stream, so run B diverges. Comparing
+  // inside one evaluate would miss it entirely — timers cannot fire while
+  // synchronous page code is running.
+  await page.waitForTimeout(350);
   const det = await page.evaluate(() => {
-    const once = () => {
-      window.__seed(0x1234567);
-      W.Game.start();
-      window.__h.takeOver();
-      return window.__h.run(60 * 90);
-    };
-    const a = once(), b = once();
-    return { a, b, equal: JSON.stringify(a) === JSON.stringify(b) };
+    const b = window.__h.run(60 * 90);
+    return { a: window.__detA, b, equal: JSON.stringify(window.__detA) === JSON.stringify(b) };
   });
   check('simulation is deterministic', det.equal,
         det.equal ? `kills=${det.a.kills} level=${det.a.level}`
@@ -248,6 +288,9 @@ async function main() {
   check('kill rate is healthy', run.kills >= 300, `${run.kills} kills`);
   check('bullet cap holds', run.maxBullets <= 900, `peak ${run.maxBullets}`);
   check('level-ups were offered', run.levelUps > 0, `${run.levelUps} cards taken`);
+  // Chest pickups queue two cards at once, so this run exercises the
+  // deferred level-up path that leaks timers if the harness lets it.
+  check('scenario leaves no pending timers', run.pending === 0, `${run.pending} outstanding`);
 
   /* ---------- 3b. far-enemy recycling ----------
      Direct test of the mechanism. A well-armed player kills fast
