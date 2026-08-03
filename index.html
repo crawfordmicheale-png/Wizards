@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Hex &amp; Hollow — Arcane Survivors</title>
+<meta name="theme-color" content="#07060f">
+<meta name="description" content="A witches-and-wizards survivor bullet-hell you play in the browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='27' font-size='27'%3E%F0%9F%A7%99%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="layer hidden">
+    <div class="hud-top">
+      <div class="hud-bars">
+        <div class="bar hp"><div class="fill" id="hpFill"></div><span id="hpText">100 / 100</span></div>
+        <div class="bar xp"><div class="fill" id="xpFill"></div><span id="xpText">Lv 1</span></div>
+      </div>
+      <div class="hud-clock">
+        <div id="clock">00:00</div>
+        <div class="hud-stats">
+          <span title="Kills">&#9760; <b id="kills">0</b></span>
+          <span title="Soul Shards">&#10022; <b id="gold">0</b></span>
+        </div>
+      </div>
+      <div class="hud-loadout">
+        <div class="slot-row" id="spellSlots"></div>
+        <div class="slot-row small" id="passiveSlots"></div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <div class="dash-meter"><div class="fill" id="dashFill"></div><span>DASH</span></div>
+    </div>
+    <div id="banner"></div>
+    <div id="bossBarWrap" class="hidden">
+      <div id="bossName">BOSS</div>
+      <div class="bar boss"><div class="fill" id="bossFill"></div></div>
+    </div>
+  </div>
+
+  <!-- ============ TITLE ============ -->
+  <div id="title" class="layer menu">
+    <div class="menu-inner">
+      <h1 class="game-title">Hex <span>&amp;</span> Hollow</h1>
+      <p class="subtitle">Arcane Survivors &mdash; hold the night until dawn</p>
+
+      <div class="char-select" id="charSelect"></div>
+
+      <div class="menu-buttons">
+        <button class="btn primary" id="btnPlay">Begin the Vigil</button>
+        <button class="btn" id="btnVault">The Coven Vault <em id="vaultGold">0 &#10022;</em></button>
+        <button class="btn ghost" id="btnHelp">How to Play</button>
+      </div>
+      <p class="hint">WASD / Arrows to move &middot; Space to Blink &middot; Esc to pause &middot; spells cast themselves</p>
+    </div>
+  </div>
+
+  <!-- ============ VAULT (meta upgrades) ============ -->
+  <div id="vault" class="layer menu hidden">
+    <div class="menu-inner wide">
+      <h2>The Coven Vault</h2>
+      <p class="subtitle">Spend Soul Shards. These blessings persist across every run.</p>
+      <div class="vault-grid" id="vaultGrid"></div>
+      <div class="menu-buttons">
+        <button class="btn" id="btnVaultBack">Back</button>
+        <button class="btn ghost danger" id="btnWipe">Erase Progress</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HELP ============ -->
+  <div id="help" class="layer menu hidden">
+    <div class="menu-inner wide">
+      <h2>How to Play</h2>
+      <div class="help-cols">
+        <div>
+          <h3>Controls</h3>
+          <ul>
+            <li><b>WASD</b> / <b>Arrows</b> &mdash; move</li>
+            <li><b>Space</b> &mdash; Blink (short dash, briefly invulnerable)</li>
+            <li><b>Esc</b> / <b>P</b> &mdash; pause</li>
+            <li><b>M</b> &mdash; mute &middot; <b>1&ndash;4</b> &mdash; pick level-up card</li>
+            <li>Touch: drag anywhere to move, tap the sigil to Blink</li>
+          </ul>
+        </div>
+        <div>
+          <h3>The Vigil</h3>
+          <ul>
+            <li>Your spells cast <b>automatically</b>. You only move.</li>
+            <li>Slain foes drop <b>essence</b>. Collect it to level and choose a boon.</li>
+            <li>Your body is large but your <b>soul-core is tiny</b> &mdash; enemy bullets only hit the glowing centre.</li>
+            <li>A <b>Warden</b> stirs every 2&frac12; minutes. They drop chests.</li>
+            <li>Survive <b>15:00</b> and the sun burns the hollow clean.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="menu-buttons"><button class="btn" id="btnHelpBack">Back</button></div>
+    </div>
+  </div>
+
+  <!-- ============ LEVEL UP ============ -->
+  <div id="levelup" class="layer modal hidden">
+    <div class="modal-inner">
+      <h2 class="lvlup-title">Power Wells Up</h2>
+      <p class="subtitle" id="lvlupSub">Choose a boon</p>
+      <div class="cards" id="cards"></div>
+      <button class="btn ghost small" id="btnReroll">Reroll <em id="rerollCount">0</em></button>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="pause" class="layer modal hidden">
+    <div class="modal-inner narrow">
+      <h2>Paused</h2>
+      <div class="loadout-detail" id="pauseLoadout"></div>
+      <div class="menu-buttons column">
+        <button class="btn primary" id="btnResume">Resume</button>
+        <button class="btn" id="btnMute">Sound: On</button>
+        <button class="btn ghost danger" id="btnQuit">Abandon Run</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ GAME OVER / VICTORY ============ -->
+  <div id="over" class="layer modal hidden">
+    <div class="modal-inner">
+      <h2 id="overTitle">The Hollow Claims You</h2>
+      <p class="subtitle" id="overSub"></p>
+      <div class="results" id="results"></div>
+      <div class="menu-buttons">
+        <button class="btn primary" id="btnAgain">Again</button>
+        <button class="btn" id="btnMenu">Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOUCH ============ -->
+  <div id="touch" class="hidden">
+    <div id="stick"><div id="stickNub"></div></div>
+    <div id="dashBtn">&#10022;</div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/content.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
