@@ -91,13 +91,16 @@ Both exist because *asynchronous* consumers of `Math.random` are easy to
 reintroduce and drain entropy at a rate set by wall-clock speed. The music
 scheduler was one such consumer; the deferred level-up card was another.
 
-Scope of that guarantee, stated precisely: results are reproducible **on a given
-machine**, and the checks verify that. They are *not* bit-identical across
-machines — a long run reports a peak crowd of 248 here and 244 on CI, stably on
-each side. The cause has not been isolated. Every assertion is therefore a range
-rather than a golden value, which absorbs the difference; the suite prints a
-browser and floating-point fingerprint at startup so a local-vs-CI discrepancy
-can be diagnosed from the logs rather than guessed at.
+Scope of that guarantee, stated precisely: results are reproducible for a given
+**Chromium build**, and the checks verify that. Different builds diverge
+slightly — a long run reports a peak crowd of 244 on CI and 248 in a sandbox
+running an older browser. That is a browser difference, not a seeding failure:
+the floating-point fingerprints are byte-identical, and CI is stable run to run.
+
+CI always uses the build Playwright pins. If the suite cannot find that build it
+falls back to a system Chromium so it still runs, and prints a warning saying
+exact counts will differ. Every assertion is a range rather than a golden value,
+so both paths pass.
 
 It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
 evolution reference in `content.js` actually resolves; a four-minute run with a

@@ -3,9 +3,9 @@
 
    Boots the real page in Chromium and drives the real update
    loop. Math.random is replaced with a seeded PRNG before any
-   game code runs, so scenarios are reproducible on a given
-   machine. Results are not bit-identical across machines, so
-   every assertion is a range rather than a golden value.
+   game code runs, so scenarios are reproducible for a given
+   Chromium build. Different builds diverge slightly, so every
+   assertion is a range rather than a golden value.
 
    Run with:  npm test
    ============================================================ */
@@ -59,13 +59,18 @@ function findLocalChromium() {
   return null;
 }
 
+/* Returns the browser plus whether it is the version Playwright pins.
+   The fallback is what lets this run in sandboxes with no browser
+   download, but a different Chromium produces slightly different
+   simulation results — so say so loudly rather than leaving someone to
+   wonder why their numbers disagree with CI. */
 async function launch() {
   try {
-    return await chromium.launch();
+    return { browser: await chromium.launch(), pinned: true };
   } catch (err) {
     const exe = findLocalChromium();
     if (!exe) throw err;
-    return chromium.launch({ executablePath: exe });
+    return { browser: await chromium.launch({ executablePath: exe }), pinned: false, exe };
   }
 }
 
@@ -165,7 +170,7 @@ function installHelpers() {
 async function main() {
   fs.mkdirSync(ARTIFACTS, { recursive: true });
   const server = await serve();
-  const browser = await launch();
+  const { browser, pinned, exe } = await launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
 
   const errors = [];
@@ -219,7 +224,12 @@ async function main() {
       .map((n) => n.toPrecision(17)).join(','),
   }));
   console.log(`\x1b[90menv  ${env.ua}  ${env.view}  spawnR=${env.spawnRadius}\x1b[0m`);
-  console.log(`\x1b[90mmath ${env.math}\x1b[0m\n`);
+  console.log(`\x1b[90mmath ${env.math}\x1b[0m`);
+  if (!pinned) {
+    console.log(`\x1b[33mwarn using a system Chromium (${exe}), not the build Playwright pins.\n` +
+                `     Checks still hold, but exact counts will differ from CI.\x1b[0m`);
+  }
+  console.log('');
 
   /* ---------- 1. boot ---------- */
   const boot = await page.evaluate(() => ({
