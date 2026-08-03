@@ -73,6 +73,54 @@ js/entities.js      player, enemies, bosses, projectiles, particles
 js/game.js          main loop, spawn director, rendering, UI
 ```
 
+## Tests
+
+```bash
+npm install
+npx playwright install chromium
+npm test
+```
+
+`tests/smoke.mjs` boots the real page in headless Chromium and drives the real
+update loop — there is no mock game. `Math.random` is replaced with a seeded
+PRNG before any game script runs, and the suite guards that seeding two ways:
+it runs one scenario twice from the same seed and compares results, and it
+asserts no scenario leaves a pending timer behind.
+
+Both exist because *asynchronous* consumers of `Math.random` are easy to
+reintroduce and drain entropy at a rate set by wall-clock speed. The music
+scheduler was one such consumer; the deferred level-up card was another.
+
+Scope of that guarantee, stated precisely: results are reproducible for a given
+**Chromium build**, and the checks verify that. Different builds diverge
+slightly — a long run reports a peak crowd of 244 on CI and 248 in a sandbox
+running an older browser. That is a browser difference, not a seeding failure:
+the floating-point fingerprints are byte-identical, and CI is stable run to run.
+
+CI always uses the build Playwright pins. If the suite cannot find that build it
+falls back to a system Chromium so it still runs, and prints a warning saying
+exact counts will differ. Every assertion is a range rather than a golden value,
+so both paths pass.
+
+It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
+evolution reference in `content.js` actually resolves; a four-minute run with a
+kiting bot; far-enemy recycling; a full 15-minute *pacifist* run (no spells at
+all — the case that once spiralled); every spell in its evolved form; every
+enemy AI branch and boss attack pattern; and each UI surface.
+
+Every major guard was validated by mutation rather than assumed to work:
+deleting the despawn line takes the pacifist crowd from 248 to 1448; scaling all
+spell damage to 15% drops the bot to level 4 with 43 kills; letting the music
+scheduler run again makes the same seed produce 160 kills instead of 103. Each
+fails the checks written for it.
+
+It deliberately does *not* fail on single-spell tuning changes — the seeded run
+simply picks a different build, and that is balance work rather than a
+regression.
+
+CI runs this on every push to `main` and every pull request
+(`.github/workflows/ci.yml`), uploading a screenshot if anything fails.
+
 ### Performance notes
 
 Enemies and projectiles are pooled; broadphase collision goes through a uniform
