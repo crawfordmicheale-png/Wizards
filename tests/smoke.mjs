@@ -74,6 +74,14 @@ function installHelpers() {
   const G = window.W.Game;
   window.W.Audio.setMuted(true);
 
+  /* The music scheduler runs on a setTimeout loop and draws from
+     Math.random() on every step. Left running, it consumes seeded
+     entropy at a rate set by wall-clock speed, so a fast machine and
+     a slow one diverge. Silence it so the simulation is the only
+     consumer. */
+  window.W.Audio.stopMusic();
+  window.W.Audio.startMusic = () => {};
+
   window.__h = {
     /** Halt the rAF chain so scenarios control time exactly. */
     takeOver() { G.loop = () => {}; },
@@ -149,7 +157,9 @@ async function main() {
 
   // Determinism: seed the PRNG before any game script executes.
   await page.addInitScript(() => {
-    let s = 0x9e3779b9;
+    let s = 0;
+    window.__seed = (n) => { s = n | 0; };
+    window.__seed(0x9e3779b9);
     Math.random = function () {
       s = (s + 0x6d2b79f5) | 0;
       let t = Math.imul(s ^ (s >>> 15), 1 | s);
@@ -201,6 +211,25 @@ async function main() {
   check('content references resolve', wiring.length === 0, wiring.slice(0, 3).join('; '));
 
   await page.evaluate(installHelpers);
+
+  /* ---------- 2b. determinism ----------
+     Same seed, same run, twice. Any asynchronous consumer of
+     Math.random() — a scheduler, a timer, an animation callback —
+     drifts the second result and fails here, which is what keeps
+     the thresholds below from flaking on a faster machine. */
+  const det = await page.evaluate(() => {
+    const once = () => {
+      window.__seed(0x1234567);
+      W.Game.start();
+      window.__h.takeOver();
+      return window.__h.run(60 * 90);
+    };
+    const a = once(), b = once();
+    return { a, b, equal: JSON.stringify(a) === JSON.stringify(b) };
+  });
+  check('simulation is deterministic', det.equal,
+        det.equal ? `kills=${det.a.kills} level=${det.a.level}`
+                  : `${JSON.stringify(det.a)} vs ${JSON.stringify(det.b)}`);
 
   /* ---------- 3. a real 4-minute run ---------- */
   errors.length = 0;

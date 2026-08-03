@@ -83,20 +83,27 @@ npm test
 
 `tests/smoke.mjs` boots the real page in headless Chromium and drives the real
 update loop — there is no mock game. `Math.random` is replaced with a seeded
-PRNG before any game script runs, so every scenario is reproducible and CI does
-not flake.
+PRNG before any game script runs, and the suite asserts its own determinism by
+running one scenario twice from the same seed and comparing results. That check
+exists because it is easy to reintroduce an *asynchronous* consumer of
+`Math.random` — the music scheduler was one — which drains entropy at a rate set
+by wall-clock speed and quietly makes a fast machine disagree with a slow one.
 
-It covers: boot and asset generation; that every sprite, icon, spawn-table and
+It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
 evolution reference in `content.js` actually resolves; a four-minute run with a
 kiting bot; far-enemy recycling; a full 15-minute *pacifist* run (no spells at
 all — the case that once spiralled); every spell in its evolved form; every
 enemy AI branch and boss attack pattern; and each UI surface.
 
-The suite was validated by mutation — deleting the despawn line takes the crowd
-from 299 to 1448 and fails two checks; scaling all spell damage to 15% drops the
-bot to level 4 and fails two more. Note that it deliberately does *not* fail on
-single-spell tuning changes: the seeded run simply picks a different build, and
-that is balance work rather than a regression.
+Every major guard was validated by mutation rather than assumed to work:
+deleting the despawn line takes the pacifist crowd from 248 to 1448; scaling all
+spell damage to 15% drops the bot to level 4 with 43 kills; letting the music
+scheduler run again makes the same seed produce 160 kills instead of 103. Each
+fails the checks written for it.
+
+It deliberately does *not* fail on single-spell tuning changes — the seeded run
+simply picks a different build, and that is balance work rather than a
+regression.
 
 CI runs this on every push to `main` and every pull request
 (`.github/workflows/ci.yml`), uploading a screenshot if anything fails.
