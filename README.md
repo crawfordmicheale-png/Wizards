@@ -1,0 +1,81 @@
+# Hex & Hollow — Arcane Survivors
+
+A witches-and-wizards **survivor bullet-hell** that runs entirely in the browser.
+You move; your spells cast themselves. Hold out against the hollow for fifteen
+minutes and the sun does the rest.
+
+## Play
+
+Open `index.html` in any modern browser. That's it — no build step, no install,
+no server, no network. It works straight off the filesystem.
+
+If you'd rather serve it:
+
+```bash
+python3 -m http.server 8000    # then visit http://localhost:8000
+```
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| `WASD` / arrows | Move |
+| `Space` | Blink — a short dash with brief invulnerability |
+| `Esc` / `P` | Pause |
+| `M` | Mute |
+| `1`–`4` | Pick a level-up card |
+| Touch | Drag anywhere on the left to move, tap the sigil to Blink |
+
+Your body is big but your **soul-core is tiny** — the glowing dot at your centre
+is the only thing enemy bullets can hit. Enemy *bodies* still hurt on contact.
+
+## How a run goes
+
+- Kill things, collect the essence they drop, level up, pick a boon.
+- Six spell slots and six charm slots. Spells cap at level 8.
+- Take a spell to 8 **and** max its paired charm to unlock an **evolution** —
+  a distinct, much nastier version. Evolution cards preempt everything else.
+- A Warden wakes every 2½ minutes. They hit hard, shift patterns at 40% health,
+  and drop a chest.
+- Survive to **15:00** to win.
+
+Soul shards persist. Spend them in **The Coven Vault** on permanent upgrades —
+that's the intended path from "died at six minutes" to actually seeing dawn.
+
+## Characters
+
+| | Starts with | Bonus |
+| --- | --- | --- |
+| **Elara Ashthorn**, Emberwitch | Firebolt | +15% spell damage |
+| **Morwenna Rime**, Frostwarden | Frost Nova | +22% spell area, sturdier |
+| **Zephyr Vance**, Stormcaller | Chain Lightning | +14% speed, +10% cast rate |
+| **Bramble Hex**, Hedge-Witch | Bubbling Cauldron | +0.7 HP/s, +30% pickup range |
+
+Bramble unlocks at 600 lifetime kills.
+
+## About the assets
+
+There are none to download. Every sprite is a hand-authored pixel map compiled
+to a canvas at load time (`js/art.js`); glows, the ground tile and the UI icons
+are generated procedurally; all sound and the music loop are synthesised with
+the Web Audio API (`js/core.js`). Nothing is fetched at runtime, so the game
+runs offline, from `file://`, and behind any content-security policy.
+
+## Layout
+
+```
+index.html          shell + every UI overlay
+css/style.css
+js/core.js          math, pooling, spatial hash, input, audio synthesis, save
+js/art.js           pixel maps, sprite/glow/ground/icon generation
+js/content.js       characters, spells, passives, enemies, bosses, vault
+js/entities.js      player, enemies, bosses, projectiles, particles
+js/game.js          main loop, spawn director, rendering, UI
+```
+
+### Performance notes
+
+Enemies and projectiles are pooled; broadphase collision goes through a uniform
+spatial hash. Particle output and damage numbers scale down automatically if the
+frame rate dips, and enemies the player has long since outrun are recycled
+rather than accumulating forever.
