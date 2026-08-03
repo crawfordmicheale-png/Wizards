@@ -1217,6 +1217,7 @@
       this.x = x; this.y = y;
       this.vx = rand(-70, 70); this.vy = rand(-70, 70);
       this.pulled = false;
+      this.lazy = false;
       this.bob = rand(TAU);
       this.age = 0;
       this.dead = false;
@@ -1230,9 +1231,7 @@
       const d2 = dx * dx + dy * dy;
       const pr = p.pickupRadius * (this.def.chest ? 0.5 : 1);
 
-      // Hunger makes essence rot where it falls. The drift below would
-      // otherwise sweep every gem up before it could expire, so under
-      // that curse essence stops chasing you and you must go and get it.
+      // Hunger makes essence rot where it falls.
       const rot = this.def.xp ? g.curse.gemLife : 0;
       this.rotLeft = rot ? rot - this.age : undefined;
       if (rot && this.age > rot) {
@@ -1241,14 +1240,23 @@
         return;
       }
 
-      // Loose essence eventually drifts after you. It travels only a
-      // little faster than a walk, so outrunning a kill still costs you
-      // time — but a fleeing player is never permanently starved of XP.
-      if (!this.pulled && (d2 < pr * pr || (this.def.xp && !rot && this.age > 4))) this.pulled = true;
+      // Two ways to be collected. Inside the pickup radius essence homes
+      // in at full speed. Otherwise it starts drifting after you once it
+      // is a few seconds old — the "lazy" pull, which keeps a fleeing
+      // player from being permanently starved. Hunger slows that lazy
+      // drift right down, so essence still comes to you, just far too
+      // slowly to catch someone who never turns around.
+      const drift = g.curse.gemDrift;
+      if (!this.pulled) {
+        if (d2 < pr * pr) { this.pulled = true; this.lazy = false; }
+        else if (this.def.xp && drift > 0 && this.age > 4) { this.pulled = true; this.lazy = true; }
+      } else if (this.lazy && d2 < pr * pr) {
+        this.lazy = false;
+      }
 
       if (this.pulled) {
         const d = Math.sqrt(d2) || 1;
-        const sp = clamp(520 - d * 0.6, 260, 900);
+        const sp = clamp(520 - d * 0.6, 260, 900) * (this.lazy ? drift : 1);
         this.vx = lerp(this.vx, (dx / d) * sp, damp(11, dt));
         this.vy = lerp(this.vy, (dy / d) * sp, damp(11, dt));
       } else {

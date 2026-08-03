@@ -470,6 +470,27 @@ async function main() {
     probe.dieBase = dieHolding([]);
     probe.dieBrittle = dieHolding(['brittle']);
 
+    // Hunger: essence must actually rot, and the lazy drift must slow.
+    // The gem is placed far enough away that the normal drift cannot
+    // reach the player inside the window, so the control is honest —
+    // otherwise the baseline gem is simply collected and both arms read
+    // the same. Level counts are too build-dependent to assert on here;
+    // the balance itself was settled by a five-seed sweep offline.
+    const gemAfter = (ids, secs) => {
+      W.Save.data.curses = ids;
+      G.start();
+      W.Input.ax = 0; W.Input.ay = 0;
+      G.pickupPool.clear();
+      G.spawnPickup('xp1', G.player.x + 8000, G.player.y);
+      const gem = G.pickupPool.active[0];
+      for (let i = 0; i < 60 * secs; i++) G.update(1 / 60);
+      return { alive: !gem.dead, speed: Math.round(Math.hypot(gem.vx, gem.vy)) };
+    };
+    probe.gemBase = gemAfter([], 14);
+    probe.gemHunger = gemAfter(['hunger'], 14);
+    probe.driftBase = gemAfter([], 6);
+    probe.driftHunger = gemAfter(['hunger'], 6);
+
     // Creeping Fog only changes rendering, so prove it renders.
     W.Save.data.curses = ['fog'];
     G.start();
@@ -489,7 +510,12 @@ async function main() {
     check('Frailty cuts health', e.frailty.maxhp < b.maxhp * 0.8,
           `${b.maxhp} -> ${e.frailty.maxhp}`);
     check('Glass Heart raises damage', e.glass.dmg > b.dmg * 1.4, `${b.dmg} -> ${e.glass.dmg}`);
-    check('Hunger rots essence', e.hunger.level < b.level, `lv ${b.level} -> ${e.hunger.level}`);
+    check('Hunger rots loose essence',
+          pr.gemBase.alive && !pr.gemHunger.alive,
+          `at 14s: clean=${pr.gemBase.alive ? 'alive' : 'gone'}, hunger=${pr.gemHunger.alive ? 'alive' : 'gone'}`);
+    check('Hunger slows the essence drift',
+          pr.driftHunger.speed < pr.driftBase.speed * 0.7 && pr.driftHunger.speed > 0,
+          `${pr.driftBase.speed} -> ${pr.driftHunger.speed} px/s`);
     check('Leadfoot slows you', e.leadfoot.speed < b.speed * 0.9,
           `${b.speed} -> ${e.leadfoot.speed}`);
     check('Famine starves progress', e.famine.level < b.level, `lv ${b.level} -> ${e.famine.level}`);

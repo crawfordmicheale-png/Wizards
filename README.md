@@ -53,7 +53,7 @@ them. Each makes the run harder and raises the shard payout; they stack, up to
 | Swarm | Far more of everything | +25% |
 | Frailty | −30% maximum health | +20% |
 | Glass Heart | You deal +60%, take +80% | +30% |
-| Hunger | Essence rots where it falls, and no longer drifts to you | +25% |
+| Hunger | Essence rots after 12s and barely drifts toward you | +25% |
 | Creeping Fog | The dark closes in; you see much less coming | +20% |
 | Restless Wardens | Bosses wake 25% sooner and hit far harder | +30% |
 | Leadfoot | −18% movement speed | +25% |
@@ -63,9 +63,18 @@ them. Each makes the run harder and raises the shard payout; they stack, up to
 
 Every curse is a multiplier on a value the engine already reads, so none of them
 needed special-case logic at the point of use. Hunger is the exception worth
-knowing about: loose essence normally drifts after you once it is a few seconds
-old, which would have swept up every gem before it could rot — so that curse
-switches the drift off, and you have to go and collect.
+knowing about. Loose essence normally drifts after you once it is a few seconds
+old, which would have swept up every gem before it could rot; under Hunger that
+drift slows to half a walking pace and essence expires at 12s.
+
+Those numbers came from a five-seed sweep rather than a guess. The first version
+rotted at 8s with no drift at all, which cost a collecting player 52% of their
+levels and a pure kiter 79% — far too steep for a +25% payout when Famine costs
+30% for +30%. At 12s / half-speed drift it costs a collector about 18% and a
+kiter roughly half, which taxes kiting specifically rather than punishing
+everyone. Single runs could not measure this: changing one parameter sends the
+seeded run down a different build, so per-setting means over five seeds were
+needed to see the trend at all.
 
 ## Characters
 

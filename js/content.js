@@ -558,6 +558,7 @@
     bossTime: 1,      // schedule multiplier: < 1 means they wake sooner
     bossPower: 1,
     gemLife: 0,       // seconds before loose essence rots; 0 = never
+    gemDrift: 1,      // speed of the lazy essence pull; 0 disables it
     fog: 0,
     noRevive: false,
     shardBonus: 0,    // additive across every curse taken
@@ -577,8 +578,12 @@
       apply: (m) => { m.damage *= 1.6; m.dmgTaken *= 1.8; } },
 
     { id: 'hunger',   name: 'Hunger',           icon: 'lodestone', shard: 0.25,
-      desc: 'Essence rots if you leave it lying. Collect it or lose it.',
-      apply: (m) => { m.gemLife = 8; } },
+      desc: 'Essence rots where it falls, and barely drifts. Go and get it.',
+      // Tuned against a five-seed sweep. Essence still crawls toward you,
+      // far slower than a walk, and rots at 12s. That costs a player who
+      // collects about 18% of their levels and a pure kiter roughly half
+      // — which is the point: it taxes kiting, not playing.
+      apply: (m) => { m.gemLife = 12; m.gemDrift = 0.5; } },
 
     { id: 'fog',      name: 'Creeping Fog',     icon: 'lens',      shard: 0.20,
       desc: 'The dark presses closer. You see much less of it coming.',
