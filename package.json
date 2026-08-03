@@ -1,0 +1,13 @@
+{
+  "name": "hex-and-hollow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A witches-and-wizards survivor bullet-hell that runs entirely in the browser.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
