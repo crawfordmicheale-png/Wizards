@@ -203,7 +203,8 @@
      PLAYER
      ========================================================= */
   class Player {
-    constructor(charDef, meta) {
+    constructor(charDef, meta, curse) {
+      this.curse = curse || W.Content.curseDefaults();
       this.def = charDef;
       this.spr = Art.sprites[charDef.spr];
       this.x = 0; this.y = 0;
@@ -280,8 +281,16 @@
       s.xpBonus += lv('cat') * P.cat.per;
       s.shardBonus += lv('cat') * P.cat.per;
 
+      // Curses land last, as multipliers over everything else, so a
+      // handicap cannot be undone by stacking the charm it opposes.
+      const cur = this.curse;
+      s.maxhp *= cur.maxhp;
+      s.damage *= cur.damage;
+      s.speed *= cur.speed;
+      s.xpBonus *= cur.xp;
+
       s.dr = clamp(s.dr, 0, 0.75);
-      this.maxhp = Math.round(s.maxhp);
+      this.maxhp = Math.max(1, Math.round(s.maxhp));
       this.baseSpeed = 208 * s.speed;
       this.pickupRadius = 92 * s.pickup;
     }
@@ -325,7 +334,7 @@
 
     hurt(amount, g) {
       if (this.iframe > 0 || this.dashTime > 0 || this.dead) return;
-      const dmg = Math.max(1, amount * (1 - this.stat.dr));
+      const dmg = Math.max(1, amount * (1 - this.stat.dr) * this.curse.dmgTaken);
       this.hp -= dmg;
       this.iframe = 0.62;
       this.flash = 0.16;
@@ -1208,6 +1217,7 @@
       this.x = x; this.y = y;
       this.vx = rand(-70, 70); this.vy = rand(-70, 70);
       this.pulled = false;
+      this.lazy = false;
       this.bob = rand(TAU);
       this.age = 0;
       this.dead = false;
@@ -1221,14 +1231,32 @@
       const d2 = dx * dx + dy * dy;
       const pr = p.pickupRadius * (this.def.chest ? 0.5 : 1);
 
-      // Loose essence eventually drifts after you. It travels only a
-      // little faster than a walk, so outrunning a kill still costs you
-      // time — but a fleeing player is never permanently starved of XP.
-      if (!this.pulled && (d2 < pr * pr || (this.def.xp && this.age > 4))) this.pulled = true;
+      // Hunger makes essence rot where it falls.
+      const rot = this.def.xp ? g.curse.gemLife : 0;
+      this.rotLeft = rot ? rot - this.age : undefined;
+      if (rot && this.age > rot) {
+        this.dead = true;
+        FX.spark(this.x, this.y, 'shadow', 4, 60);
+        return;
+      }
+
+      // Two ways to be collected. Inside the pickup radius essence homes
+      // in at full speed. Otherwise it starts drifting after you once it
+      // is a few seconds old — the "lazy" pull, which keeps a fleeing
+      // player from being permanently starved. Hunger slows that lazy
+      // drift right down, so essence still comes to you, just far too
+      // slowly to catch someone who never turns around.
+      const drift = g.curse.gemDrift;
+      if (!this.pulled) {
+        if (d2 < pr * pr) { this.pulled = true; this.lazy = false; }
+        else if (this.def.xp && drift > 0 && this.age > 4) { this.pulled = true; this.lazy = true; }
+      } else if (this.lazy && d2 < pr * pr) {
+        this.lazy = false;
+      }
 
       if (this.pulled) {
         const d = Math.sqrt(d2) || 1;
-        const sp = clamp(520 - d * 0.6, 260, 900);
+        const sp = clamp(520 - d * 0.6, 260, 900) * (this.lazy ? drift : 1);
         this.vx = lerp(this.vx, (dx / d) * sp, damp(11, dt));
         this.vy = lerp(this.vy, (dy / d) * sp, damp(11, dt));
       } else {
@@ -1241,6 +1269,9 @@
     }
     draw(g) {
       const bobY = Math.sin(this.bob) * 3;
+      // Rotting essence blinks faster the closer it is to being lost.
+      if (this.rotLeft !== undefined && this.rotLeft < 3 &&
+          Math.floor(this.age * (this.rotLeft < 1.2 ? 14 : 6)) % 2 === 0) return;
       g.globalCompositeOperation = 'lighter';
       Art.glow(g, this.def.glow, this.x, this.y + bobY, this.def.chest ? 80 : 30, 0.4);
       g.globalAlpha = 1;

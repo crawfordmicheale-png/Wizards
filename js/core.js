@@ -419,7 +419,8 @@
   const Save = {
     data: null,
     _default() {
-      return { shards: 0, meta: {}, best: 0, runs: 0, kills: 0, muted: false, char: 'ember', wins: 0 };
+      return { shards: 0, meta: {}, best: 0, runs: 0, kills: 0, muted: false,
+               char: 'ember', wins: 0, curses: [] };
     },
     load() {
       try {

@@ -42,6 +42,40 @@ is the only thing enemy bullets can hit. Enemy *bodies* still hurt on contact.
 Soul shards persist. Spend them in **The Coven Vault** on permanent upgrades —
 that's the intended path from "died at six minutes" to actually seeing dawn.
 
+## Curses
+
+Ten optional handicaps, bound from the title screen and kept until you lift
+them. Each makes the run harder and raises the shard payout; they stack, up to
++260%.
+
+| Curse | Effect | Payout |
+| --- | --- | --- |
+| Swarm | Far more of everything | +25% |
+| Frailty | −30% maximum health | +20% |
+| Glass Heart | You deal +60%, take +80% | +30% |
+| Hunger | Essence rots after 12s and barely drifts toward you | +25% |
+| Creeping Fog | The dark closes in; you see much less coming | +20% |
+| Restless Wardens | Bosses wake 25% sooner and hit far harder | +30% |
+| Leadfoot | −18% movement speed | +25% |
+| Barrage | Hostile spells fly 40% faster and hit 35% harder | +30% |
+| Famine | −35% essence gained | +30% |
+| Brittle Soul | Revivals do not work | +25% |
+
+Every curse is a multiplier on a value the engine already reads, so none of them
+needed special-case logic at the point of use. Hunger is the exception worth
+knowing about. Loose essence normally drifts after you once it is a few seconds
+old, which would have swept up every gem before it could rot; under Hunger that
+drift slows to half a walking pace and essence expires at 12s.
+
+Those numbers came from a five-seed sweep rather than a guess. The first version
+rotted at 8s with no drift at all, which cost a collecting player 52% of their
+levels and a pure kiter 79% — far too steep for a +25% payout when Famine costs
+30% for +30%. At 12s / half-speed drift it costs a collector about 18% and a
+kiter roughly half, which taxes kiting specifically rather than punishing
+everyone. Single runs could not measure this: changing one parameter sends the
+seeded run down a different build, so per-setting means over five seeds were
+needed to see the trend at all.
+
 ## Characters
 
 | | Starts with | Bonus |
@@ -102,11 +136,21 @@ falls back to a system Chromium so it still runs, and prints a warning saying
 exact counts will differ. Every assertion is a range rather than a golden value,
 so both paths pass.
 
-It covers: boot and asset generation; self-verified determinism; that every sprite, icon, spawn-table and
-evolution reference in `content.js` actually resolves; a four-minute run with a
-kiting bot; far-enemy recycling; a full 15-minute *pacifist* run (no spells at
-all — the case that once spiralled); every spell in its evolved form; every
-enemy AI branch and boss attack pattern; and each UI surface.
+It covers: boot and asset generation; self-verified determinism; that every
+sprite, icon, spawn-table and evolution reference in `content.js` actually
+resolves; a four-minute run with a kiting bot; far-enemy recycling; a full
+15-minute *pacifist* run (no spells at all — the case that once spiralled);
+every spell in its evolved form; every enemy AI branch and boss attack pattern;
+every curse; and each UI surface.
+
+Curses are checked for measurable effect, not mere existence — Swarm has to
+actually raise the crowd, Restless Wardens has to actually spawn a boss earlier.
+Where a curse changes a mechanism rather than a statistic it gets a direct probe
+instead: Barrage is asserted on projectile velocity, Brittle Soul by holding
+three revives and confirming death still ends the run, Hunger by watching a
+single gem expire. Those are preferred wherever available, because an emergent
+statistic can move for reasons unrelated to the change — a first draft of the
+Barrage check asserted bullet *count* and passed vacuously at 0 to 0.
 
 Every major guard was validated by mutation rather than assumed to work:
 deleting the despawn line takes the pacifist crowd from 248 to 1448; scaling all

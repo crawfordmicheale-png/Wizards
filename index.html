@@ -52,6 +52,7 @@
 
       <div class="menu-buttons">
         <button class="btn primary" id="btnPlay">Begin the Vigil</button>
+        <button class="btn" id="btnCurses">Curses <em id="curseTag">none</em></button>
         <button class="btn" id="btnVault">The Coven Vault <em id="vaultGold">0 &#10022;</em></button>
         <button class="btn ghost" id="btnHelp">How to Play</button>
       </div>
@@ -68,6 +69,19 @@
       <div class="menu-buttons">
         <button class="btn" id="btnVaultBack">Back</button>
         <button class="btn ghost danger" id="btnWipe">Erase Progress</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CURSES ============ -->
+  <div id="curses" class="layer menu hidden">
+    <div class="menu-inner wide">
+      <h2>Curses</h2>
+      <p class="subtitle" id="curseSub">Make the night worse. Get paid for it.</p>
+      <div class="vault-grid" id="curseGrid"></div>
+      <div class="menu-buttons">
+        <button class="btn" id="btnCursesBack">Back</button>
+        <button class="btn ghost" id="btnCursesClear">Lift All</button>
       </div>
     </div>
   </div>
@@ -95,6 +109,7 @@
             <li>Your body is large but your <b>soul-core is tiny</b> &mdash; enemy bullets only hit the glowing centre.</li>
             <li>A <b>Warden</b> stirs every 2&frac12; minutes. They drop chests.</li>
             <li>Survive <b>15:00</b> and the sun burns the hollow clean.</li>
+            <li><b>Curses</b> make the night worse and pay more shards. Bind as many as you dare.</li>
           </ul>
         </div>
       </div>
