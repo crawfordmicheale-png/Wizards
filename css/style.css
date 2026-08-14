@@ -92,6 +92,27 @@ h3{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--viol
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 .btn em{font-style:normal;color:var(--gold);margin-left:6px}
 
+/* ---------------- Stage select ---------------- */
+.stage-select{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:22px 0 2px}
+.stage{
+  width:198px;padding:11px 12px 12px;cursor:pointer;text-align:left;
+  background:rgba(16,13,34,.7);border:1px solid var(--line);border-radius:12px;
+  transition:transform .14s,border-color .18s,box-shadow .18s,background .18s;
+}
+.stage:hover{transform:translateY(-3px)}
+.stage.sel{
+  border-color:var(--teal);background:rgba(14,52,52,.5);
+  box-shadow:0 0 0 1px var(--teal),0 8px 24px rgba(60,220,190,.22);
+}
+.stage.locked{opacity:.5;cursor:default}
+.stage .sname{font-weight:800;font-size:14px;letter-spacing:.02em}
+.stage .stitle{
+  font-size:10px;color:var(--teal);text-transform:uppercase;
+  letter-spacing:.12em;margin:1px 0 6px;
+}
+.stage.locked .stitle{color:var(--muted)}
+.stage .sdesc{font-size:11.5px;color:var(--muted);line-height:1.45}
+
 /* ---------------- Character select ---------------- */
 .char-select{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:26px 0 4px}
 .char{
@@ -298,6 +319,7 @@ h3{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--viol
   .hud-bars{max-width:none;flex-basis:100%}
   .hud-clock{order:2}
   .char{width:140px}
+  .stage{width:min(200px,46vw)}
   .card{width:min(158px,44vw)}
   .modal-inner{padding:20px 16px}
 }

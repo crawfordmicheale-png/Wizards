@@ -420,7 +420,8 @@
     data: null,
     _default() {
       return { shards: 0, meta: {}, best: 0, runs: 0, kills: 0, muted: false,
-               char: 'ember', wins: 0, curses: [] };
+               char: 'ember', wins: 0, curses: [], stage: 'hollow',
+               settings: { shake: 1, particles: 1, numbers: true } };
     },
     load() {
       try {

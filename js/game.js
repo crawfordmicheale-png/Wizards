@@ -53,7 +53,12 @@
       this.buildMenu();
       this.bindUI();
 
+      this.settings = Object.assign({ shake: 1, particles: 1, numbers: true },
+                                    Save.data.settings || {});
+      this.applySettings();
       this.selectedChar = Save.data.char || 'ember';
+      this.selectedStage = Save.data.stage || 'hollow';
+      this.stage = C.stage(this.selectedStage);
       this.setMuted(!!Save.data.muted);
 
       this.last = performance.now();
@@ -119,6 +124,7 @@
       }
       $('vaultGold').textContent = Save.data.shards + ' ✦';
       $('curseTag').textContent = this.curseTag();
+      this.buildStages();
     },
 
     bindUI() {
@@ -127,6 +133,17 @@
       $('btnHelpBack').onclick = () => { $('help').classList.add('hidden'); $('title').classList.remove('hidden'); };
       $('btnVault').onclick = () => { this.openVault(); };
       $('btnCurses').onclick = () => { this.openCurses(); };
+      $('btnSettings').onclick = () => {
+        $('title').classList.add('hidden'); $('settings').classList.remove('hidden');
+        this.renderSettings();
+      };
+      $('btnSettingsBack').onclick = () => {
+        $('settings').classList.add('hidden'); $('title').classList.remove('hidden');
+      };
+      $('setShake').onclick = () => this.cycleSetting('shake', [1, 0.5, 0]);
+      $('setParticles').onclick = () => this.cycleSetting('particles', [1, 0.6, 0.3]);
+      $('setNumbers').onclick = () => this.cycleSetting('numbers', [true, false]);
+      $('setSound').onclick = () => { this.setMuted(!Audio_.muted); this.renderSettings(); };
       $('btnCursesBack').onclick = () => {
         $('curses').classList.add('hidden'); $('title').classList.remove('hidden'); this.buildMenu();
       };
@@ -196,6 +213,67 @@
       const head = $('vault').querySelector('.subtitle');
       head.innerHTML = `You hold <b style="color:var(--gold)">${Save.data.shards} ✦</b> soul shards. ` +
                        `These blessings persist across every run.`;
+    },
+
+    /* ---------------- Settings ---------------- */
+    applySettings() {
+      FX.shakeScale = this.settings.shake;
+      Save.data.settings = this.settings;
+    },
+
+    cycleSetting(key, values) {
+      const i = values.findIndex((v) => v === this.settings[key]);
+      this.settings[key] = values[(i + 1) % values.length];
+      this.applySettings();
+      Save.save();
+      this.audio('choose');
+      this.renderSettings();
+    },
+
+    renderSettings() {
+      const lbl = (v, map) => map[String(v)] ?? String(v);
+      $('setShake').textContent = 'Screen Shake: ' +
+        lbl(this.settings.shake, { '1': 'Full', '0.5': 'Reduced', '0': 'Off' });
+      $('setParticles').textContent = 'Particles: ' +
+        lbl(this.settings.particles, { '1': 'Full', '0.6': 'Reduced', '0.3': 'Minimal' });
+      $('setNumbers').textContent = 'Damage Numbers: ' + (this.settings.numbers ? 'On' : 'Off');
+      $('setSound').textContent = 'Sound: ' + (Audio_.muted ? 'Off' : 'On');
+    },
+
+    /* ---------------- Stage select ---------------- */
+    buildStages() {
+      const wrap = $('stageSelect');
+      wrap.innerHTML = '';
+      let anyOpen = false;
+      for (const st of C.stages) {
+        const locked = st.unlock ? st.unlock(Save.data) : null;
+        const el = document.createElement('div');
+        el.className = 'stage' + (locked ? ' locked' : '');
+        el.innerHTML =
+          `<div class="sname">${locked ? '???' : st.name}</div>` +
+          `<div class="stitle">${st.title}</div>` +
+          `<div class="sdesc">${locked || st.blurb}</div>`;
+        if (!locked) {
+          anyOpen = true;
+          el.onclick = () => {
+            this.selectedStage = st.id;
+            this.stage = st;
+            Save.data.stage = st.id; Save.save();
+            [...wrap.children].forEach((n) => n.classList.remove('sel'));
+            el.classList.add('sel');
+            Audio_.resume(); this.audio('choose');
+          };
+          if (st.id === this.selectedStage) el.classList.add('sel');
+        }
+        wrap.appendChild(el);
+      }
+      // A stage that was selected and has since been locked (progress wiped)
+      // must not leave the run pointing at something unplayable.
+      if (anyOpen && !wrap.querySelector('.sel')) {
+        this.selectedStage = 'hollow';
+        this.stage = C.stage('hollow');
+        wrap.querySelector('.stage:not(.locked)').classList.add('sel');
+      }
     },
 
     /* ---------------- Curses ---------------- */
@@ -286,6 +364,10 @@
       this.bosses.length = 0;
       FX.reset();
 
+      this.stage = C.stage(this.selectedStage);
+      this.plan = C.rollStagePlan(this.stage);
+      this.groundPattern = this.ctx.createPattern(
+        Art.groundFor(this.stage.id, this.stage.ground), 'repeat');
       this.curse = C.curseMods(Save.data.curses);
       this.player = new W.Player(def, this.metaStats(), this.curse);
       this.time = 0;
@@ -305,6 +387,7 @@
       $('title').classList.add('hidden');
       $('vault').classList.add('hidden');
       $('curses').classList.add('hidden');
+      $('settings').classList.add('hidden');
       $('help').classList.add('hidden');
       $('over').classList.add('hidden');
       $('hud').classList.remove('hidden');
@@ -316,8 +399,7 @@
       Audio_.resume();
       Audio_.startMusic();
       const bound = this.activeCurses();
-      this.banner(bound.length ? `${bound.length} CURSE${bound.length > 1 ? 'S' : ''} BOUND` : 'SURVIVE UNTIL DAWN',
-                  bound.length ? '#ff6b8f' : '#c9a8ff');
+      this.banner(this.stage.name.toUpperCase(), bound.length ? '#ff6b8f' : '#c9a8ff');
       Save.data.runs++; Save.save();
     },
 
@@ -333,8 +415,9 @@
 
       this.fpsAvg = lerp(this.fpsAvg, 1 / dt, 0.05);
       // Trim particle output rather than dropping frames.
-      FX.quality = this.fpsAvg < 40 ? 0.4 : this.fpsAvg < 52 ? 0.7 : 1;
-      this.showNumbers = this.fpsAvg > 45;
+      const auto = this.fpsAvg < 40 ? 0.4 : this.fpsAvg < 52 ? 0.7 : 1;
+      FX.quality = Math.min(auto, this.settings.particles);
+      this.showNumbers = this.settings.numbers && this.fpsAvg > 45;
 
       W.Input.update();
       if (this.state === 'play') this.update(dt);
@@ -450,10 +533,11 @@
        ===================================================== */
     difficulty() {
       const m = this.time / 60;
+      const st = this.stage ? this.stage.mods : { hp: 1, spd: 1 };
       return {
-        hp: 1 + m * 0.34 + m * m * 0.026,
+        hp: (1 + m * 0.34 + m * m * 0.026) * st.hp,
         dmg: 1 + m * 0.125,
-        spd: 1 + Math.min(0.35, m * 0.028),
+        spd: (1 + Math.min(0.35, m * 0.028)) * st.spd,
         bossHp: 1 + m * 0.12,
       };
     },
@@ -465,7 +549,7 @@
 
       // --- steady trickle -----------------------------------
       const alive = this.enemyPool.active.length;
-      const target = Math.min(300, 24 + m * 14) * this.curse.spawnRate;
+      const target = Math.min(300, 24 + m * 14) * this.curse.spawnRate * this.stage.mods.spawn;
       const rate = alive > 460 ? 0 : clamp((target - alive) * 0.55, 0, 34 * this.curse.spawnRate);
       this.spawnAcc += rate * dt;
       while (this.spawnAcc >= 1) {
@@ -486,20 +570,20 @@
       }
 
       // --- scripted events ----------------------------------
-      while (this.eventIdx < C.events.length && this.time >= C.events[this.eventIdx].at) {
-        const ev = C.events[this.eventIdx++];
-        this.runEvent(ev, scale);
+      while (this.eventIdx < this.plan.swarms.length &&
+             this.time >= this.plan.swarms[this.eventIdx].at) {
+        this.runEvent(this.plan.swarms[this.eventIdx++], scale);
       }
 
       // --- bosses -------------------------------------------
-      while (this.bossIdx < C.bossSchedule.length &&
-             this.time >= C.bossSchedule[this.bossIdx].at * this.curse.bossTime) {
-        const b = C.bossSchedule[this.bossIdx++];
+      while (this.bossIdx < this.plan.bosses.length &&
+             this.time >= this.plan.bosses[this.bossIdx].at * this.curse.bossTime) {
+        const b = this.plan.bosses[this.bossIdx++];
         this.spawnBoss(b.id, (b.mult || 1) * this.curse.bossPower, scale);
       }
       // Past the schedule, keep escalating.
-      if (this.bossIdx >= C.bossSchedule.length && this.time > 870 && !this.activeBoss) {
-        this.spawnBoss('devourer', 2.4, scale);
+      if (this.bossIdx >= this.plan.bosses.length && this.time > 870 && !this.activeBoss) {
+        this.spawnBoss(pick(this.stage.bosses), 2.4, scale);
         this.bossIdx++;
       }
     },
@@ -509,7 +593,7 @@
       const opts = this._buf();
       for (const row of C.spawnTable) {
         if (m < row.from) continue;
-        const wgt = row.weight(m);
+        const wgt = row.weight(m) * (this.stage.weights[row.id] ?? 1);
         if (wgt <= 0) continue;
         total += wgt;
         opts.push({ id: row.id, w: total });
@@ -1132,10 +1216,11 @@
       if (!abandoned) this.audio(won ? 'win' : 'death');
 
       $('overTitle').textContent = won ? 'Dawn Breaks' : abandoned ? 'You Slip Away' : 'The Hollow Claims You';
+      const where = this.stage.name;
       $('overSub').textContent = won
-        ? 'The sun crests the ridge and the hollow falls silent. You held.'
-        : abandoned ? 'The vigil is abandoned. The shards are yours to keep.'
-        : `You fell at ${fmtTime(this.time)}. The night goes on without you.`;
+        ? `The sun crests the ridge and ${where} falls silent. You held.`
+        : abandoned ? `You slip out of ${where}. The shards are yours to keep.`
+        : `${where} took you at ${fmtTime(this.time)}. The night goes on without you.`;
 
       const bound = this.activeCurses();
       $('results').innerHTML =

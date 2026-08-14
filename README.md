@@ -42,6 +42,29 @@ is the only thing enemy bullets can hit. Enemy *bodies* still hurt on contact.
 Soul shards persist. Spend them in **The Coven Vault** on permanent upgrades —
 that's the intended path from "died at six minutes" to actually seeing dawn.
 
+## Stages
+
+Where you hold the vigil changes what holds it against you. Within a stage the
+swarm creatures and the Warden order are **shuffled every run**, so the beats
+stay authored while the cast varies.
+
+| Stage | Character | Unlock |
+| --- | --- | --- |
+| **The Hollow** | Everything in fair measure | open |
+| **The Drowned Chapel** | Casters and archers; fewer bodies, far more spellfire | survive one night |
+| **The Ashen Waste** | Fast melee, almost no spellfire, and it never stops | 3000 lifetime kills |
+
+Each stage re-colours the ground, applies per-enemy weight multipliers over the
+base spawn table, tilts crowd size and speed, and picks which Wardens turn up.
+Measured over 150 seconds, the Chapel runs roughly 18 ranged to 22 melee where
+the Hollow runs 8 to 49 and the Waste 4 to 58.
+
+## Settings
+
+Screen shake (full / reduced / off), particle density, damage numbers and sound,
+all persisted. Shake in particular is worth turning down — boss detonations kick
+hard, and there was previously no way to stop them.
+
 ## Curses
 
 Ten optional handicaps, bound from the title screen and kept until you lift
@@ -141,7 +164,12 @@ sprite, icon, spawn-table and evolution reference in `content.js` actually
 resolves; a four-minute run with a kiting bot; far-enemy recycling; a full
 15-minute *pacifist* run (no spells at all — the case that once spiralled);
 every spell in its evolved form; every enemy AI branch and boss attack pattern;
-every curse; and each UI surface.
+every curse; every stage; and each UI surface.
+
+Stages are checked for identity rather than existence: the Chapel must actually
+field proportionally more ranged enemies than the Hollow, the Waste must crowd
+harder with fewer shooters, and ten rolls of a stage plan must produce at least
+five distinct swarm-and-Warden orders.
 
 Curses are checked for measurable effect, not mere existence — Swarm has to
 actually raise the crowd, Restless Wardens has to actually spawn a boss earlier.

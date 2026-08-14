@@ -465,7 +465,7 @@
     build('skull', MAP_SKULL, { k: '#12100a', b: '#e0dcc8' }, 3);
 
     buildGlows();
-    buildGround();
+    Art.ground = Art.groundFor("hollow", null);
     buildIcons();
   };
 
@@ -519,26 +519,33 @@
      and cracks are baked in so the floor has texture without
      any per-frame cost.
      --------------------------------------------------------- */
-  function buildGround() {
+  const GROUND_DEFAULT = {
+    base: '#0d0a19',
+    stoneA: 'rgba(30,24,56,0.35)', stoneB: 'rgba(6,4,14,0.35)',
+    grid: 'rgba(70,54,120,0.16)', rune: 'rgba(140,100,230,0.13)',
+    tuft: [40, 70, 60], tuftAlpha: 0.28, tufts: 60, runes: 5, blobs: 900,
+  };
+
+  function buildGround(pal) {
+    pal = Object.assign({}, GROUND_DEFAULT, pal || {});
     const S = 256;
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const g = c.getContext('2d');
 
-    g.fillStyle = '#0d0a19';
+    g.fillStyle = pal.base;
     g.fillRect(0, 0, S, S);
 
     // Mottled stone
-    for (let i = 0; i < 900; i++) {
+    for (let i = 0; i < pal.blobs; i++) {
       const x = Math.random() * S, y = Math.random() * S;
       const r = 2 + Math.random() * 16;
-      const v = Math.random();
-      g.fillStyle = v < 0.5 ? 'rgba(30,24,56,0.35)' : 'rgba(6,4,14,0.35)';
+      g.fillStyle = Math.random() < 0.5 ? pal.stoneA : pal.stoneB;
       g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
     }
 
     // Flagstone grid, wrapping so tiles line up seamlessly
-    g.strokeStyle = 'rgba(70,54,120,0.16)';
+    g.strokeStyle = pal.grid;
     g.lineWidth = 2;
     for (let i = 0; i <= 4; i++) {
       const p = i * (S / 4);
@@ -547,9 +554,9 @@
     }
 
     // A few faint runes
-    g.strokeStyle = 'rgba(140,100,230,0.13)';
+    g.strokeStyle = pal.rune;
     g.lineWidth = 2.5;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < pal.runes; i++) {
       const x = 24 + Math.random() * (S - 48), y = 24 + Math.random() * (S - 48);
       const r = 8 + Math.random() * 14;
       const sides = 3 + ((Math.random() * 4) | 0);
@@ -563,10 +570,11 @@
       g.beginPath(); g.arc(x, y, r * 0.45, 0, TAU); g.stroke();
     }
 
-    // Sparse grass tufts to break up the stone
-    for (let i = 0; i < 60; i++) {
+    // Sparse tufts to break up the stone
+    const [tr, tg, tb] = pal.tuft;
+    for (let i = 0; i < pal.tufts; i++) {
       const x = Math.random() * S, y = Math.random() * S;
-      g.strokeStyle = `rgba(${40 + Math.random() * 30 | 0},${70 + Math.random() * 40 | 0},60,0.28)`;
+      g.strokeStyle = `rgba(${tr + Math.random() * 30 | 0},${tg + Math.random() * 40 | 0},${tb},${pal.tuftAlpha})`;
       g.lineWidth = 1.5;
       for (let b = 0; b < 3; b++) {
         g.beginPath();
@@ -575,8 +583,15 @@
         g.stroke();
       }
     }
-    Art.ground = c;
+    return c;
   }
+
+  /** Ground tiles are built once per stage and cached by id. */
+  Art.grounds = {};
+  Art.groundFor = function (id, pal) {
+    if (!Art.grounds[id]) Art.grounds[id] = buildGround(pal);
+    return Art.grounds[id];
+  };
 
   /* ---------------------------------------------------------
      UI icons — small vector glyphs for spells and passives.

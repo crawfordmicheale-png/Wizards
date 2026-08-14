@@ -461,21 +461,33 @@
   ];
 
   /* ---------------------------------------------------------
-     Scripted events — swarms, elite packs, breathers.
+     Scripted events. These define only *when* a swarm lands and
+     what shape it takes — which creature shows up is drawn from
+     the stage's pool and shuffled per run, so the beats stay
+     authored while the content varies.
      --------------------------------------------------------- */
-  C.events = [
-    { at: 60,  kind: 'ring',  type: 'imp',      n: 26, text: 'A tide of imps' },
-    { at: 105, kind: 'flank', type: 'bat',      n: 30, text: 'Wings in the dark' },
-    { at: 220, kind: 'ring',  type: 'skeleton', n: 24, text: 'The bone choir' },
-    { at: 260, kind: 'pack',  type: 'slime',    n: 16, text: 'Something oozes closer' },
-    { at: 380, kind: 'flank', type: 'batRed',   n: 40, text: 'Bloodwing swarm' },
-    { at: 430, kind: 'ring',  type: 'cultist',  n: 20, text: 'The coven encircles you' },
-    { at: 520, kind: 'pack',  type: 'gargoyle', n: 5,  text: 'The statues wake' },
-    { at: 610, kind: 'ring',  type: 'wraith',   n: 22, text: 'Wraith procession' },
-    { at: 700, kind: 'flank', type: 'wispRed',  n: 26, text: 'Hateful lights' },
-    { at: 760, kind: 'pack',  type: 'gargoyle', n: 9,  text: 'A gargoyle host' },
-    { at: 820, kind: 'ring',  type: 'cultist2', n: 26, text: 'The full coven' },
+  C.eventSlots = [
+    { at: 60,  kind: 'ring',  n: 26 },
+    { at: 105, kind: 'flank', n: 30 },
+    { at: 220, kind: 'ring',  n: 24 },
+    { at: 260, kind: 'pack',  n: 16 },
+    { at: 380, kind: 'flank', n: 40 },
+    { at: 430, kind: 'ring',  n: 20 },
+    { at: 520, kind: 'pack',  n: 6 },
+    { at: 610, kind: 'ring',  n: 22 },
+    { at: 700, kind: 'flank', n: 26 },
+    { at: 760, kind: 'pack',  n: 9 },
+    { at: 820, kind: 'ring',  n: 26 },
   ];
+
+  /** Headline for a swarm, built from its shape and its creature. */
+  C.eventText = function (kind, enemyId) {
+    const n = (C.enemies[enemyId] || {}).name || 'Something';
+    const plural = n.endsWith('s') ? n : n + 's';
+    if (kind === 'ring') return `${plural} encircle you`;
+    if (kind === 'flank') return `${plural} from both sides`;
+    return `A pack of ${plural}`;
+  };
 
   /* =========================================================
      BOSSES
@@ -526,16 +538,91 @@
   for (const id in B) { B[id].id = id; B[id].boss = true; }
   C.bosses = B;
 
-  /** Boss appearances, in order. After the last, they repeat with scaling. */
-  C.bossSchedule = [
-    { at: 150, id: 'matriarch' },
-    { at: 330, id: 'lich' },
-    { at: 510, id: 'gorgon' },
-    { at: 690, id: 'devourer' },
-    { at: 840, id: 'gorgon', mult: 1.8 },
+  /** When Wardens wake. Which Warden is decided per run by the stage. */
+  C.bossSlots = [
+    { at: 150, mult: 1.0 },
+    { at: 330, mult: 1.0 },
+    { at: 510, mult: 1.0 },
+    { at: 690, mult: 1.0 },
+    { at: 840, mult: 1.8 },
   ];
 
   C.RUN_LENGTH = 900;   // 15:00 — survive to see dawn
+
+  /* =========================================================
+     STAGES — where the vigil is held.
+
+     A stage re-colours the ground, tilts the spawn table toward a
+     kind of enemy, picks which Wardens turn up, and supplies the
+     pool of creatures that scripted swarms are drawn from. Within
+     a stage the swarm creatures and Warden order are shuffled per
+     run, so the beats stay authored while the cast varies.
+     ========================================================= */
+  C.stages = [
+    {
+      id: 'hollow', name: 'The Hollow', title: 'Where it started',
+      blurb: 'Old flagstones and older runes. Everything the night has to offer, in fair measure.',
+      ground: null,                              // the default palette
+      weights: {},                               // no tilt
+      mods: { spawn: 1, hp: 1, spd: 1 },
+      bosses: ['matriarch', 'lich', 'gorgon', 'devourer'],
+      swarms: ['imp', 'bat', 'skeleton', 'slime', 'cultist', 'batRed', 'wraith', 'gargoyle'],
+    },
+    {
+      id: 'chapel', name: 'The Drowned Chapel', title: 'Ranged nightmare',
+      blurb: 'Flooded aisles under green water. Fewer bodies, far more spellfire — this is the bullet-hell stage.',
+      ground: {
+        base: '#07141a', stoneA: 'rgba(20,52,64,0.38)', stoneB: 'rgba(3,10,16,0.4)',
+        grid: 'rgba(60,140,150,0.15)', rune: 'rgba(90,220,220,0.14)',
+        tuft: [30, 90, 90], tuftAlpha: 0.22, tufts: 40, runes: 8,
+      },
+      // Casters and archers dominate; brawlers are thinned out.
+      weights: { cultist: 2.2, cultist2: 2.2, skeleton: 2.0, skeleton2: 2.0,
+                 wisp: 2.4, wispRed: 2.4, imp: 0.5, bat: 0.6, batRed: 0.6,
+                 slime: 0.7, gargoyle: 0.6 },
+      mods: { spawn: 0.82, hp: 1.0, spd: 0.95 },
+      bosses: ['lich', 'gorgon', 'lich', 'devourer'],
+      swarms: ['skeleton', 'cultist', 'wisp', 'skeleton2', 'cultist2', 'wispRed'],
+      unlock: (s) => (s.wins >= 1 ? null : 'Survive one night to the dawn'),
+    },
+    {
+      id: 'waste', name: 'The Ashen Waste', title: 'They come running',
+      blurb: 'Cracked red earth under a dead sky. Little spellfire, but the swarm never stops coming.',
+      ground: {
+        base: '#180a0a', stoneA: 'rgba(72,26,18,0.36)', stoneB: 'rgba(10,3,3,0.42)',
+        grid: 'rgba(150,70,45,0.14)', rune: 'rgba(255,140,70,0.12)',
+        tuft: [80, 45, 30], tuftAlpha: 0.2, tufts: 26, runes: 3, blobs: 1100,
+      },
+      // Fast melee everywhere; the shooters mostly stay home.
+      weights: { imp: 2.0, impBlue: 2.0, impGreen: 1.8, bat: 2.2, batRed: 2.2,
+                 wraith: 2.0, slime: 1.4, slimeAcid: 1.4,
+                 skeleton: 0.35, skeleton2: 0.35, cultist: 0.4, cultist2: 0.4,
+                 wisp: 0.3, wispRed: 0.3 },
+      mods: { spawn: 1.35, hp: 1.0, spd: 1.1 },
+      bosses: ['matriarch', 'devourer', 'matriarch', 'gorgon'],
+      swarms: ['imp', 'bat', 'batRed', 'wraith', 'impBlue', 'slime', 'impGreen'],
+      unlock: (s) => (s.kills >= 3000 ? null : `Slay 3000 foes in total (${s.kills}/3000)`),
+    },
+  ];
+
+  C.stage = function (id) {
+    return C.stages.find((s) => s.id === id) || C.stages[0];
+  };
+
+  /** Build one run's swarm and Warden order for a stage. */
+  C.rollStagePlan = function (stage) {
+    const pool = W.shuffle(stage.swarms.slice());
+    const swarms = C.eventSlots.map((slot, i) => {
+      const type = pool[i % pool.length];
+      return { at: slot.at, kind: slot.kind, n: slot.n, type,
+               text: C.eventText(slot.kind, type) };
+    });
+    const cast = W.shuffle(stage.bosses.slice());
+    const bosses = C.bossSlots.map((slot, i) => ({
+      at: slot.at, mult: slot.mult, id: cast[i % cast.length],
+    }));
+    return { swarms, bosses };
+  };
 
   /* =========================================================
      CURSES — opt-in handicaps taken before a run. Each one
