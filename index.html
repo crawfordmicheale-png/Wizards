@@ -48,12 +48,14 @@
       <h1 class="game-title">Hex <span>&amp;</span> Hollow</h1>
       <p class="subtitle">Arcane Survivors &mdash; hold the night until dawn</p>
 
+      <div class="stage-select" id="stageSelect"></div>
       <div class="char-select" id="charSelect"></div>
 
       <div class="menu-buttons">
         <button class="btn primary" id="btnPlay">Begin the Vigil</button>
         <button class="btn" id="btnCurses">Curses <em id="curseTag">none</em></button>
         <button class="btn" id="btnVault">The Coven Vault <em id="vaultGold">0 &#10022;</em></button>
+        <button class="btn ghost" id="btnSettings">Settings</button>
         <button class="btn ghost" id="btnHelp">How to Play</button>
       </div>
       <p class="hint">WASD / Arrows to move &middot; Space to Blink &middot; Esc to pause &middot; spells cast themselves</p>
@@ -86,6 +88,21 @@
     </div>
   </div>
 
+  <!-- ============ SETTINGS ============ -->
+  <div id="settings" class="layer menu hidden">
+    <div class="menu-inner">
+      <h2>Settings</h2>
+      <p class="subtitle">Comfort and clarity. Saved between runs.</p>
+      <div class="menu-buttons column">
+        <button class="btn" id="setShake">Screen Shake: Full</button>
+        <button class="btn" id="setParticles">Particles: Full</button>
+        <button class="btn" id="setNumbers">Damage Numbers: On</button>
+        <button class="btn" id="setSound">Sound: On</button>
+      </div>
+      <div class="menu-buttons"><button class="btn" id="btnSettingsBack">Back</button></div>
+    </div>
+  </div>
+
   <!-- ============ HELP ============ -->
   <div id="help" class="layer menu hidden">
     <div class="menu-inner wide">
@@ -110,6 +127,7 @@
             <li>A <b>Warden</b> stirs every 2&frac12; minutes. They drop chests.</li>
             <li>Survive <b>15:00</b> and the sun burns the hollow clean.</li>
             <li><b>Curses</b> make the night worse and pay more shards. Bind as many as you dare.</li>
+            <li>Each <b>stage</b> tilts what comes for you, and shuffles the order every run.</li>
           </ul>
         </div>
       </div>

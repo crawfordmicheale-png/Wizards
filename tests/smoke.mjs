@@ -262,10 +262,14 @@ async function main() {
       const e = C.spells[id].evo;
       if (e && !C.passives[e.req]) missing.push(`evo ${id} -> ${e.req}`);
     }
-    // Every spawn-table and event entry must name a real enemy.
+    // Every spawn-table entry must name a real enemy.
     for (const r of C.spawnTable) if (!C.enemies[r.id]) missing.push(`spawn ${r.id}`);
-    for (const e of C.events) if (!C.enemies[e.type]) missing.push(`event ${e.type}`);
-    for (const b of C.bossSchedule) if (!C.bosses[b.id]) missing.push(`schedule ${b.id}`);
+    // Stage data is hand-authored per stage, so typos are easy and silent.
+    for (const st of C.stages) {
+      for (const id of st.swarms) if (!C.enemies[id]) missing.push(`${st.id} swarm ${id}`);
+      for (const id of st.bosses) if (!C.bosses[id]) missing.push(`${st.id} boss ${id}`);
+      for (const id in st.weights) if (!C.enemies[id]) missing.push(`${st.id} weight ${id}`);
+    }
     return missing;
   });
   check('content references resolve', wiring.length === 0, wiring.slice(0, 3).join('; '));
@@ -277,12 +281,15 @@ async function main() {
      Math.random() — a scheduler, a timer, an animation callback —
      drifts the second result and fails here, which is what keeps
      the thresholds below from flaking on a faster machine. */
+  // Seed *before* start(): a run now rolls its stage plan (swarm cast and
+  // Warden order) during setup, so the seed has to be in place first or
+  // the two arms get different plans.
   await page.evaluate(() => {
-    W.Game.start(); window.__h.takeOver(); window.__seed(0x1234567);
+    window.__seed(0x1234567); W.Game.start(); window.__h.takeOver();
     window.__detA = window.__h.run(60 * 90);
   });
   await page.evaluate(() => {
-    W.Game.start(); window.__h.takeOver(); window.__seed(0x1234567);
+    window.__seed(0x1234567); W.Game.start(); window.__h.takeOver();
   });
   // Deliberate gap *after* reseeding: a timer left pending by run A fires
   // here and draws from the fresh stream, so run B diverges. Comparing
@@ -532,6 +539,64 @@ async function main() {
           `+${Math.round(curse.stacked.shard * 100)}%`);
     check('all curses at once still runs', curse.stacked.time > 0,
           `t=${curse.stacked.time}s`);
+  }
+
+  /* ---------- 5c. stages ----------
+     A stage has to change how the run actually plays, and the per-run
+     shuffle has to produce different plans from run to run.        */
+  errors.length = 0;
+  const stages = await page.evaluate(() => {
+    const G = W.Game;
+    const runStage = (id, secs) => {
+      W.Save.data.curses = []; W.Save.data.meta = {};
+      window.__seed(0x57A6E5);
+      G.selectedStage = id; G.selectedChar = 'ember';
+      G.start(); window.__h.takeOver();
+      const r = window.__h.run(60 * secs);
+      // Count what actually turned up, by broad family.
+      let ranged = 0, melee = 0;
+      const shooters = ['skeleton', 'skeleton2', 'cultist', 'cultist2', 'wisp', 'wispRed'];
+      for (const e of G.enemyPool.active) {
+        if (e.dead) continue;
+        (shooters.includes(e.def.id) ? (ranged++) : (melee++));
+      }
+      return { ...r, ranged, melee, ground: G.groundPattern != null };
+    };
+    const out = { each: {} };
+    for (const st of W.Content.stages) out.each[st.id] = runStage(st.id, 150);
+
+    // The plan is rolled per run; ten rolls should not be identical.
+    const plans = new Set();
+    for (let i = 0; i < 10; i++) {
+      const p = W.Content.rollStagePlan(W.Content.stage('hollow'));
+      plans.add(p.swarms.map((x) => x.type).join(',') + '|' + p.bosses.map((x) => x.id).join(','));
+    }
+    out.distinctPlans = plans.size;
+
+    // Every slot must be filled with something real.
+    const plan = W.Content.rollStagePlan(W.Content.stage('chapel'));
+    out.planOk = plan.swarms.every((x) => W.Content.enemies[x.type] && x.text) &&
+                 plan.bosses.every((x) => W.Content.bosses[x.id]) &&
+                 plan.swarms.length === W.Content.eventSlots.length &&
+                 plan.bosses.length === W.Content.bossSlots.length;
+    W.Save.data.stage = 'hollow';
+    return out;
+  });
+  check('stages run clean', errors.length === 0, errors[0] || '');
+  {
+    const e = stages.each;
+    check('every stage builds its ground',
+          Object.values(e).every((r) => r.ground), '');
+    check('Chapel leans ranged',
+          e.chapel.ranged / Math.max(1, e.chapel.melee) >
+          e.hollow.ranged / Math.max(1, e.hollow.melee) * 1.5,
+          `chapel ${e.chapel.ranged}r/${e.chapel.melee}m vs hollow ${e.hollow.ranged}r/${e.hollow.melee}m`);
+    check('Waste leans melee and crowds harder',
+          e.waste.melee > e.hollow.melee && e.waste.ranged <= e.hollow.ranged,
+          `waste ${e.waste.ranged}r/${e.waste.melee}m`);
+    check('run plans vary between runs', stages.distinctPlans >= 5,
+          `${stages.distinctPlans}/10 distinct`);
+    check('every plan slot is filled', stages.planOk, '');
   }
 
   /* ---------- 6. UI surfaces ---------- */

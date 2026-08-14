@@ -95,7 +95,12 @@
       this.texts.push({ x, y, str, color, t: 0, dur: 0.85, size: size || 15, vy: -46, vx: rand(-18, 18) });
     },
 
-    kick(amount) { this.shake = Math.min(28, this.shake + amount); },
+    // Scaled by the player's setting; 0 disables screen shake entirely.
+    shakeScale: 1,
+    kick(amount) {
+      if (this.shakeScale <= 0) return;
+      this.shake = Math.min(28, this.shake + amount * this.shakeScale);
+    },
 
     update(dt) {
       this.textAllow = Math.min(16, (this.textAllow || 0) + 24 * dt);
