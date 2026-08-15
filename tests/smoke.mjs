@@ -465,8 +465,8 @@ async function main() {
       const p = G.player;
       const r = window.__h.run(60 * secs);
       return { ...r, maxhp: p.maxhp, dmg: +p.stat.damage.toFixed(3),
-               speed: Math.round(p.baseSpeed), shard: G.curse.shardBonus,
-               bosses: G.bosses.length };
+               speed: Math.round(p.baseSpeed), xp: +p.stat.xpBonus.toFixed(3),
+               shard: G.curse.shardBonus, bosses: G.bosses.length };
     };
 
     // 130s: past the first Warden under the Restless curse (150s x 0.75)
@@ -554,7 +554,12 @@ async function main() {
           `${pr.driftBase.speed} -> ${pr.driftHunger.speed} px/s`);
     check('Leadfoot slows you', e.leadfoot.speed < b.speed * 0.9,
           `${b.speed} -> ${e.leadfoot.speed}`);
-    check('Famine starves progress', e.famine.level < b.level, `lv ${b.level} -> ${e.famine.level}`);
+    // Asserted on the essence multiplier, not on levels reached. Level is
+    // a coarse integer over a short window, so a 35% cut can land in the
+    // same bucket as the baseline — which is exactly what happened, and
+    // is the same build-divergence trap the other probes exist to avoid.
+    check('Famine starves progress', e.famine.xp < b.xp * 0.8,
+          `essence x${b.xp} -> x${e.famine.xp}`);
     check('Restless Wardens wake early', e.wardens.bosses > 0 && b.bosses === 0,
           `bosses at 130s: ${b.bosses} -> ${e.wardens.bosses}`);
     check('Barrage speeds hostile fire', pr.shotBarrage > pr.shotBase * 1.3,
