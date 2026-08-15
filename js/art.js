@@ -94,6 +94,124 @@
   ....krrrrrrk....
   `;
 
+  /* --- The wider cast. The hollow draws more than witches now, so
+         each of these leads with a silhouette that reads at a glance:
+         plume, hood, shield, ears, collar, beak. --------------- */
+
+  const MAP_BATTLEMAGE = `
+  .......gg.......
+  ......ggg.......
+  ......kkkk......
+  .....khhhhk.....
+  .....kHHHHk...s.
+  ....khheehhk..s.
+  ....khhhhhhk..s.
+  ...kkaaaaaakk.s.
+  ..kaaaaaaaaaaks.
+  ..kaarrrrrraaks.
+  ...krrrrrrrrkS..
+  ...krrrggrrrk...
+  ...krrrrrrrrk...
+  ...krrrrrrrrk...
+  ....krrrrrrk....
+  ....kaa..aak....
+  `;
+
+  const MAP_WARDEN = `
+  ......kkkk......
+  .....khhhhk.....
+  ....khhhhhhk..b.
+  ....khssssHk.b..
+  ....khseesHk.b..
+  ....khsssshk.b..
+  ...kkhhhhhhkkb..
+  ..khhllllllhhb..
+  ..khlllllllhhb..
+  ..khllggllllhb..
+  ...khlllllllkb..
+  ...khhllllhhk.b.
+  ...khhllllhhk.b.
+  ....khhllhhk....
+  ....khh..hhk....
+  ....kk....kk....
+  `;
+
+  const MAP_KNIGHT = `
+  .......pp.......
+  ......kppk......
+  .....kkkkkk.....
+  ....kaaaaaak....
+  ....kaeeeeak....
+  ....kaaaaaak....
+  ...kkaaaaaakk...
+  .Skaaaaaaaaakk..
+  .SSkaaaaaaaaak..
+  .SSkaaaAAaaaak..
+  .SSkaaaAAaaaak..
+  .Skaaaaaaaaaak..
+  ..kaaaaaaaaak...
+  ...kaaaaaaak....
+  ...kaa...aak....
+  ...kk.....kk....
+  `;
+
+  const MAP_WEREWOLF = `
+  ..k..........k..
+  ..kfk........kfk
+  ..kffk......kffk
+  ...kffkkkkkkffk.
+  ...kfffffffffk..
+  ..kffeeffeeffk..
+  ..kffffffffffk..
+  ..kfffmmmmfffk..
+  ...kffnnnnffk...
+  ..kkfffffffkk...
+  .kcffffffffffck.
+  .kcfffffffffck..
+  ..kffffffffk....
+  ..kffffffffk....
+  ..kcfk..kfck....
+  ..kcck..kcck....
+  `;
+
+  const MAP_VAMPIRE = `
+  ......kkkk......
+  .....khhhhk.....
+  ....khhhhhhk....
+  ....kssssssk....
+  ....ksrrrrsk....
+  ....kssmmssk....
+  ..kCkkssskkCk...
+  ..kCCkkkkkCCk...
+  .kCCCrrrrCCCCk..
+  .kCCCrrrrCCCCk..
+  .kCCrrrrrrCCCk..
+  ..kCrrggrrCCk...
+  ..kkrrrrrrkk....
+  ...krrrrrrk.....
+  ...krrrrrrk.....
+  ....kk..kk......
+  `;
+
+  const MAP_ALCHEMIST = `
+  ......kkkk......
+  .....khhhhk.....
+  ....khhhhhhk....
+  ....kgeegghk....
+  ....kbbbbbhk....
+  ...kbbbbbbbk....
+  ...kbbk.........
+  ...kkkkkkkk.....
+  ..kccccccccck.f.
+  ..kcccccccccKff.
+  ..kccGGccccck.f.
+  ..kccGGcccccK...
+  ...kcccccccck...
+  ...kcccccccck...
+  ....kcccccck....
+  ....kcc..cck....
+  `;
+
   const MAP_IMP = `
   ................
   ..k..........k..
@@ -385,6 +503,22 @@
              s: '#e8cfa8', e: '#0c2014', w: '#5a4426', g: '#b6ff7a' },
   };
 
+  /* One palette per hero; the letters are local to each map. */
+  const HERO_PALETTES = {
+    battlemage: { k: '#12101f', h: '#3d4a7a', H: '#5a6aa8', a: '#8a93b8', r: '#4a3f8f',
+                  e: '#ffd479', g: '#ff9448', s: '#d8dcf0', S: '#8a8fb0' },
+    warden:     { k: '#0c1a10', h: '#2b5a34', l: '#3f7a46', s: '#e8cfa8', e: '#1a3a1c',
+                  H: '#5a9a5f', g: '#ffd479', b: '#a8804a' },
+    knight:     { k: '#101318', a: '#9aa4b4', A: '#d8dfe8', e: '#ffcf5f', p: '#e04f6f',
+                  S: '#5a6478' },
+    werewolf:   { k: '#140d0a', f: '#6b5040', e: '#ffd23f', m: '#2a1a14', n: '#f0e8d8',
+                  c: '#8a6a52' },
+    vampire:    { k: '#12070f', h: '#1a1420', s: '#e0d4dc', r: '#7a1030', e: '#ff3f5f',
+                  m: '#3a0a18', C: '#2a0a18', g: '#ffd479' },
+    alchemist:  { k: '#0f1210', h: '#2a2a30', g: '#8fe8ff', b: '#c9b48a', c: '#4a5a48',
+                  G: '#a8e83c', K: '#6b5a3a', f: '#a8e83c' },
+  };
+
   const ENEMY_PALETTES = {
     imp:      { k: '#180612', b: '#c0392b', e: '#ffe066', m: '#3d0a0a' },
     impBlue:  { k: '#06121e', b: '#2f7fbf', e: '#c9ffff', m: '#0a2438' },
@@ -425,8 +559,14 @@
   Art.build = build;
 
   Art.init = function () {
-    // Player wizards
+    // Player heroes — the four robed originals share one map, the rest
+    // each get their own so the silhouettes stay distinct.
     for (const id in CHAR_PALETTES) build('wiz_' + id, MAP_WIZARD, CHAR_PALETTES[id], 3);
+    const HERO_MAPS = {
+      battlemage: MAP_BATTLEMAGE, warden: MAP_WARDEN, knight: MAP_KNIGHT,
+      werewolf: MAP_WEREWOLF, vampire: MAP_VAMPIRE, alchemist: MAP_ALCHEMIST,
+    };
+    for (const id in HERO_MAPS) build('wiz_' + id, HERO_MAPS[id], HERO_PALETTES[id], 3);
 
     // Rank-and-file
     build('imp', MAP_IMP, ENEMY_PALETTES.imp, 3);
@@ -734,6 +874,81 @@
       star(g, 16, 16, 6.5, 2.6, 4, 0); g.fill();
     },
 
+    runeblade: (g) => {
+      g.strokeStyle = '#d8dcf0'; g.lineWidth = 3.4;
+      g.beginPath(); g.moveTo(5, 27); g.lineTo(24, 6); g.stroke();
+      g.strokeStyle = '#8fb4ff'; g.lineWidth = 1.4;
+      g.beginPath(); g.moveTo(7, 25); g.lineTo(23, 8); g.stroke();
+      g.strokeStyle = '#7a6a4a'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(4, 28); g.lineTo(9, 23); g.stroke();
+      g.strokeStyle = 'rgba(140,190,255,.75)'; g.lineWidth = 2.2;
+      g.beginPath(); g.arc(16, 17, 12, -0.9, 0.7); g.stroke();
+    },
+    thornvolley: (g) => {
+      g.strokeStyle = '#5a9a5f'; g.lineWidth = 2.4;
+      g.beginPath(); g.arc(9, 16, 11, -1.1, 1.1); g.stroke();
+      g.strokeStyle = '#d8cba8'; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(9, 5); g.lineTo(9, 27); g.stroke();
+      for (const [y, w] of [[10, 1], [16, 0], [22, 1]]) {
+        g.strokeStyle = '#e8dcc0'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(9, y + w); g.lineTo(28, y + w); g.stroke();
+        g.fillStyle = '#a8e83c';
+        g.beginPath(); g.moveTo(30, y + w); g.lineTo(24, y - 2 + w); g.lineTo(24, y + 3 + w);
+        g.closePath(); g.fill();
+      }
+    },
+    hammer: (g) => {
+      g.strokeStyle = 'rgba(200,180,255,.5)'; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(16, 16, 13, 0.4, 5.2); g.stroke();
+      g.fillStyle = '#7a5a34'; g.fillRect(14.5, 12, 3, 17);
+      g.fillStyle = '#9aa4b4'; g.fillRect(7, 5, 18, 9);
+      g.fillStyle = '#d8dfe8'; g.fillRect(7, 5, 18, 3);
+      g.fillStyle = '#5a6478'; g.fillRect(7, 11, 18, 3);
+    },
+    claws: (g) => {
+      for (let i = 0; i < 3; i++) {
+        const off = i * 8;
+        g.strokeStyle = i === 1 ? '#fff0f0' : '#ffb0b0';
+        g.lineWidth = 3.2 - i * 0.3;
+        g.beginPath();
+        g.moveTo(3 + off, 3);
+        g.quadraticCurveTo(6 + off, 17, 1 + off, 29);
+        g.stroke();
+      }
+      g.globalAlpha = 0.5; g.strokeStyle = '#ff5f6f'; g.lineWidth = 1.4;
+      g.beginPath(); g.moveTo(2, 6); g.quadraticCurveTo(16, 14, 30, 6); g.stroke();
+      g.globalAlpha = 1;
+    },
+    bloodbolt: (g) => {
+      g.fillStyle = '#c4143c';
+      g.beginPath();
+      g.moveTo(16, 2);
+      g.bezierCurveTo(29, 15, 25, 29, 16, 29);
+      g.bezierCurveTo(7, 29, 3, 15, 16, 2);
+      g.fill();
+      g.fillStyle = '#ff6b8f';
+      g.beginPath(); g.ellipse(12, 18, 3.4, 5, -0.4, 0, TAU); g.fill();
+      g.fillStyle = '#ffd0da';
+      g.beginPath(); g.arc(11, 15, 1.8, 0, TAU); g.fill();
+    },
+    flask: (g) => {
+      g.fillStyle = '#6b7a68';
+      g.fillRect(13, 3, 6, 5);
+      g.fillStyle = 'rgba(200,230,200,.35)';
+      g.beginPath();
+      g.moveTo(13, 8); g.lineTo(19, 8); g.lineTo(27, 26);
+      g.quadraticCurveTo(28, 30, 23, 30); g.lineTo(9, 30);
+      g.quadraticCurveTo(4, 30, 5, 26); g.closePath(); g.fill();
+      g.fillStyle = '#a8e83c';
+      g.beginPath();
+      g.moveTo(8, 20); g.lineTo(24, 20); g.lineTo(27, 26);
+      g.quadraticCurveTo(28, 30, 23, 30); g.lineTo(9, 30);
+      g.quadraticCurveTo(4, 30, 5, 26); g.closePath(); g.fill();
+      g.fillStyle = '#e8ffa8';
+      g.beginPath(); g.arc(13, 24, 2, 0, TAU); g.fill();
+      g.beginPath(); g.arc(19, 26, 1.4, 0, TAU); g.fill();
+    },
+
     /* --- passives --- */
     grimoire: (g) => {
       g.fillStyle = '#6a2f8f';
@@ -847,6 +1062,8 @@
       firebolt: '#ff7a2a', frost: '#5fc9ff', chain: '#c9a8ff', orbs: '#7fa8ff',
       cauldron: '#a8e83c', bats: '#b07fe8', beam: '#ffd479', starfall: '#ffb84f',
       siphon: '#ff5f8f', ward: '#7fc9ff',
+      runeblade: '#8fb4ff', thornvolley: '#5a9a5f', hammer: '#9aa4b4',
+      claws: '#ff5f6f', bloodbolt: '#c4143c', flask: '#a8e83c',
     };
     for (const k in ICON_DRAW) {
       Art.icons[k] = iconCanvas(ICON_DRAW[k], bgFor[k] || '#5a4a8a');

@@ -27,7 +27,7 @@
 
     reset() {
       this.pool.clear();
-      this.arcs.length = this.texts.length = this.rings.length = 0;
+      this.arcs.length = this.texts.length = this.rings.length = this.pops.length = 0;
       this.shake = 0;
     },
 
@@ -97,6 +97,15 @@
 
     // Scaled by the player's setting; 0 disables screen shake entirely.
     shakeScale: 1,
+    /* A dying creature leaves its own silhouette behind for a beat,
+       expanding and fading. Far more legible than a puff of dust,
+       and it costs one extra drawImage. */
+    pops: [],
+    pop(x, y, spr, scale, color, facing) {
+      if (this.pops.length > 40 || this.quality < 0.5) return;
+      this.pops.push({ x, y, spr, scale: scale || 1, color, facing: facing || 1, t: 0, dur: 0.26 });
+    },
+
     kick(amount) {
       if (this.shakeScale <= 0) return;
       this.shake = Math.min(28, this.shake + amount * this.shakeScale);
@@ -134,10 +143,26 @@
         t.y += t.vy * dt; t.x += t.vx * dt;
         t.vy += 60 * dt;
       }
+      for (let i = this.pops.length - 1; i >= 0; i--) {
+        this.pops[i].t += dt;
+        if (this.pops[i].t >= this.pops[i].dur) this.pops.splice(i, 1);
+      }
       this.shake = Math.max(0, this.shake - this.shake * this.shakeDecay * dt - 6 * dt);
     },
 
     draw(g) {
+      // Death silhouettes first, under the glow.
+      for (const o of this.pops) {
+        const k = 1 - o.t / o.dur;
+        // Restrained on purpose: a full-brightness silhouette at scale
+        // reads as a white blob and buries whatever is behind it.
+        const sc = o.scale * (1 + (1 - k) * 0.35);
+        const w = o.spr.w * sc, h = o.spr.h * sc;
+        g.globalAlpha = k * k * 0.5;
+        g.drawImage(o.spr.flash, o.x - w / 2, o.y - h / 2, w, h);
+      }
+      g.globalAlpha = 1;
+
       // Additive glow pass — particles, rings, arcs
       g.globalCompositeOperation = 'lighter';
       const a = this.pool.active;
@@ -255,7 +280,7 @@
       const s = this.stat = {
         damage: 1, area: 1, cdr: 1, speed: 1, maxhp: this.def.hp,
         projectiles: 0, pickup: 1, dr: 0, regen: 0,
-        xpBonus: 1, shardBonus: 1, revives: 0, rerolls: 1,
+        xpBonus: 1, shardBonus: 1, revives: 0, rerolls: 1, lifesteal: 0,
       };
 
       // Vault
@@ -266,6 +291,8 @@
 
       // Character
       s.damage += c.damage || 0;
+      s.dr += c.dr || 0;
+      s.lifesteal = (s.lifesteal || 0) + (c.lifesteal || 0);
       s.area += c.area || 0;
       s.speed += c.speed || 0;
       s.cdr += c.cdr || 0;
@@ -490,7 +517,7 @@
       this.flash = 0.1;
       if (g.showNumbers) {
         FX.text(this.x + rand(-6, 6), this.y - this.r - 6, Math.round(dmg),
-                opt.crit ? '#fff2a8' : '#ffffff', opt.crit ? 17 : 14);
+                opt.crit ? '#ffe066' : '#ffffff', opt.crit ? 19 : 14);
       }
       if (opt.knock) {
         const res = 1 - (this.def.knockResist || 0);
@@ -904,6 +931,7 @@
       this.trail = o.trail;
       this.burst = o.burst || null;
       this.burn = o.burn || null;
+      this.leech = o.leech || 0;
       this.src = o.src;
       this.hit = new Set();
       this.dead = false;
@@ -925,6 +953,7 @@
         this.hit.add(e);
         g.damageEnemy(e, this.dmg, { src: this.src, knock: { x: this.vx * 0.22, y: this.vy * 0.22 } });
         if (this.burn) { e.burnDps = Math.max(e.burnDps, this.burn.dps); e.burnT = this.burn.dur; }
+        if (this.leech) g.player.heal(this.leech);
         FX.spark(this.x, this.y, this.glow, 5, 120);
         if (this.burst) {
           g.explode(this.x, this.y, this.burst.r, this.burst.dmg, this.glow, this.src);
@@ -1198,6 +1227,209 @@
     }
   }
 
+  /* ---------------------------------------------------------
+     Slash — a melee arc anchored to the caster. Used by blades,
+     claws and anything that swings rather than throws. Hits each
+     enemy once, so a wide arc through a crowd is one big hit
+     rather than a stream of small ones.
+     --------------------------------------------------------- */
+  class Slash {
+    constructor() { this.dead = true; }
+    init(o) {
+      this.owner = o.owner;
+      this.a = o.a; this.arc = o.arc; this.r = o.r;
+      this.dmg = o.dmg; this.knock = o.knock ?? 260;
+      this.leech = o.leech || 0;
+      this.color = o.color || 'frost';
+      this.life = o.life || 0.22; this.dur = this.life;
+      this.spin = o.spin || 0;
+      this.src = o.src;
+      this.hit = new Set();
+      this.dead = false;
+      return this;
+    }
+    update(dt, g) {
+      this.life -= dt;
+      this.a += this.spin * dt;
+      const p = this.owner;
+      this.x = p.x; this.y = p.y;
+      const found = g.queryEnemies(this.x, this.y, this.r + 40);
+      for (let i = 0; i < found.length; i++) {
+        const e = found[i];
+        if (e.dead || this.hit.has(e)) continue;
+        const dx = e.x - this.x, dy = e.y - this.y;
+        const rr = this.r + e.r;
+        if (dx * dx + dy * dy > rr * rr) continue;
+        // Inside the wedge?
+        let d = Math.atan2(dy, dx) - this.a;
+        while (d > Math.PI) d -= TAU;
+        while (d < -Math.PI) d += TAU;
+        if (Math.abs(d) > this.arc / 2) continue;
+        this.hit.add(e);
+        const ang = Math.atan2(dy, dx);
+        g.damageEnemy(e, this.dmg, {
+          src: this.src, crit: true,
+          knock: { x: Math.cos(ang) * this.knock, y: Math.sin(ang) * this.knock },
+        });
+        if (this.leech) g.player.heal(this.leech);
+        FX.spark(e.x, e.y, this.color, 5, 140);
+      }
+      if (this.life <= 0) this.dead = true;
+    }
+    draw(g) {
+      const k = Math.max(0, this.life / this.dur);
+      g.globalCompositeOperation = 'lighter';
+      g.globalAlpha = k * 0.9;
+      const col = Art.glowColor[this.color] || '#fff';
+      for (let pass = 0; pass < 2; pass++) {
+        g.strokeStyle = pass ? '#ffffff' : col;
+        g.lineWidth = (pass ? 4 : 14) * k;
+        g.beginPath();
+        g.arc(this.x, this.y, this.r * (0.72 + (1 - k) * 0.3),
+              this.a - this.arc / 2, this.a + this.arc / 2);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Boomerang — flies out, slows, and comes back to whoever
+     threw it. Damages on a per-enemy cooldown so a long flight
+     through a crowd keeps paying.
+     --------------------------------------------------------- */
+  class Boomerang {
+    constructor() { this.dead = true; }
+    init(o) {
+      this.owner = o.owner;
+      this.x = o.x; this.y = o.y;
+      this.vx = Math.cos(o.a) * o.speed;
+      this.vy = Math.sin(o.a) * o.speed;
+      this.dmg = o.dmg;
+      this.r = o.r || 16;
+      this.color = o.color || 'arcane';
+      this.life = o.life || 2.4;
+      this.spin = 0;
+      this.src = o.src;
+      this.cool = new Map();
+      this.returning = false;
+      this.dead = false;
+      return this;
+    }
+    update(dt, g) {
+      this.life -= dt;
+      this.spin += dt * 16;
+      const p = this.owner;
+      if (!this.returning) {
+        // Drag it to a stop, then reel it in.
+        this.vx *= 1 - Math.min(1, 1.5 * dt);
+        this.vy *= 1 - Math.min(1, 1.5 * dt);
+        if (this.vx * this.vx + this.vy * this.vy < 60 * 60) this.returning = true;
+      } else {
+        const a = Math.atan2(p.y - this.y, p.x - this.x);
+        const sp = 620;
+        this.vx = lerp(this.vx, Math.cos(a) * sp, damp(5, dt));
+        this.vy = lerp(this.vy, Math.sin(a) * sp, damp(5, dt));
+        if (W.dist2(this.x, this.y, p.x, p.y) < 26 * 26) this.dead = true;
+      }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      if (this.life <= 0) this.dead = true;
+      FX.trail(this.x, this.y, this.color, 13);
+
+      const found = g.queryEnemies(this.x, this.y, this.r + 40);
+      const now = this.life;
+      for (let i = 0; i < found.length; i++) {
+        const e = found[i];
+        if (e.dead) continue;
+        const rr = this.r + e.r;
+        if (W.dist2(this.x, this.y, e.x, e.y) > rr * rr) continue;
+        const last = this.cool.get(e);
+        if (last !== undefined && last - now < 0.35) continue;
+        this.cool.set(e, now);
+        g.damageEnemy(e, this.dmg, {
+          src: this.src, crit: true,
+          knock: { x: this.vx * 0.18, y: this.vy * 0.18 },
+        });
+        FX.spark(e.x, e.y, this.color, 4, 120);
+      }
+    }
+    draw(g) {
+      g.save();
+      g.translate(this.x, this.y);
+      g.rotate(this.spin);
+      g.globalCompositeOperation = 'lighter';
+      Art.glow(g, this.color, 0, 0, 46, 0.55);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+      g.fillStyle = '#9aa4b4';
+      g.fillRect(-3, -13, 6, 26);
+      g.fillStyle = '#d8dfe8';
+      g.fillRect(-11, -8, 22, 7);
+      g.fillStyle = '#5a6478';
+      g.fillRect(-11, -1, 22, 3);
+      g.restore();
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Flask — a lobbed bottle. Arcs to a target point, drawing a
+     shadow beneath so the landing spot is readable, then breaks
+     into a lingering pool.
+     --------------------------------------------------------- */
+  class Flask {
+    constructor() { this.dead = true; }
+    init(o) {
+      this.x = o.x; this.y = o.y;
+      this.sx = o.x; this.sy = o.y;
+      this.tx = o.tx; this.ty = o.ty;
+      this.t = 0; this.dur = o.dur || 0.55;
+      this.dmg = o.dmg; this.r = o.r;
+      this.dps = o.dps; this.zoneDur = o.zoneDur || 3.5;
+      this.color = o.color || 'toxic';
+      this.src = o.src;
+      this.spin = rand(TAU);
+      this.dead = false;
+      return this;
+    }
+    update(dt, g) {
+      this.t += dt;
+      this.spin += dt * 9;
+      const k = Math.min(1, this.t / this.dur);
+      this.x = lerp(this.sx, this.tx, k);
+      this.y = lerp(this.sy, this.ty, k);
+      this.lift = Math.sin(k * Math.PI) * 90;
+      if (chance(dt * 20)) FX.trail(this.x, this.y - this.lift, this.color, 9);
+      if (k >= 1) {
+        this.dead = true;
+        g.explode(this.x, this.y, this.r, this.dmg, this.color, this.src);
+        g.spawnZone({ x: this.x, y: this.y, r: this.r * 0.85, dps: this.dps,
+                      dur: this.zoneDur, color: this.color, slow: 0.2, src: this.src });
+      }
+    }
+    draw(g) {
+      // Landing shadow, so the throw telegraphs where it lands.
+      g.globalAlpha = 0.32;
+      g.fillStyle = '#000';
+      g.beginPath();
+      g.ellipse(this.x, this.y, 9, 4, 0, 0, TAU);
+      g.fill();
+      g.globalAlpha = 1;
+      const y = this.y - (this.lift || 0);
+      g.globalCompositeOperation = 'lighter';
+      Art.glow(g, this.color, this.x, y, 32, 0.6);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+      g.save();
+      g.translate(this.x, y); g.rotate(this.spin);
+      g.fillStyle = Art.glowColor[this.color] || '#a8e83c';
+      g.fillRect(-4, -5, 8, 10);
+      g.fillStyle = '#cfe0cf';
+      g.fillRect(-2, -8, 4, 4);
+      g.restore();
+    }
+  }
+
   /* =========================================================
      PICKUPS
      ========================================================= */
@@ -1285,6 +1517,9 @@
     }
   }
 
+  W.Slash = Slash;
+  W.Boomerang = Boomerang;
+  W.Flask = Flask;
   W.Bolt = Bolt;
   W.Bullet = Bullet;
   W.SpiritBat = SpiritBat;

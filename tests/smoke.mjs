@@ -92,17 +92,37 @@ function installHelpers() {
     /** Halt the rAF chain so scenarios control time exactly. */
     takeOver() { G.loop = () => {}; },
 
-    /** Repulsion-based kiting bot — approximates a competent player. */
+    // Weapons that reach across the screen. A build holding none of
+    // these has to close, so the bot must too — otherwise it flees its
+    // own melee range and reports that blades and claws do not work.
+    RANGED: new Set(['firebolt', 'chain', 'bats', 'starfall', 'siphon', 'beam',
+                     'thornvolley', 'hammer', 'bloodbolt', 'flask']),
+
+    /** Repulsion-based bot. Kites when it can shoot, closes when it cannot. */
     bot() {
       const p = G.player;
       let fx = 0, fy = 0;
+      // Short-range builds have to hover at the edge of their own reach:
+      // close enough to land, far enough not to be walked over. Weakening
+      // the repulsion instead of shortening it just gets them overrun.
+      const canShoot = p.spells.some((s) => this.RANGED.has(s.id));
+      const avoid = canShoot ? 260 : 135;
+      const push = 1400;
       const en = G.enemyPool.active;
       for (let i = 0; i < en.length; i += 2) {
         const e = en[i];
         if (e.dead) continue;
         const dx = p.x - e.x, dy = p.y - e.y, d2 = dx * dx + dy * dy;
-        if (d2 > 260 * 260 || d2 < 1) continue;
-        fx += dx / d2 * 1400; fy += dy / d2 * 1400;
+        if (d2 > avoid * avoid || d2 < 1) continue;
+        fx += dx / d2 * push; fy += dy / d2 * push;
+      }
+      // With no ranged option, drift toward the nearest target instead.
+      if (!canShoot) {
+        const t = G.nearestEnemy(p.x, p.y, 520);
+        if (t) {
+          const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
+          fx += (t.x - p.x) / d * 1.4; fy += (t.y - p.y) / d * 1.4;
+        }
       }
       const bl = G.bulletPool.active;
       for (let i = 0; i < bl.length; i++) {
@@ -252,6 +272,15 @@ async function main() {
     const missing = [];
     const C = W.Content, A = W.Art;
     for (const c of C.chars) if (!A.sprites[c.spr]) missing.push(`char ${c.id} -> ${c.spr}`);
+    for (const c of C.chars) if (!C.spells[c.start]) missing.push(`char ${c.id} start ${c.start}`);
+    // Every deed named by a hero, stage or weapon must exist, or the thing
+    // it gates becomes permanently unreachable.
+    for (const c of C.chars) if (c.deed && !C.deed(c.deed)) missing.push(`char deed ${c.deed}`);
+    for (const st of C.stages) if (st.deed && !C.deed(st.deed)) missing.push(`stage deed ${st.deed}`);
+    for (const id in C.weaponDeeds) {
+      if (!C.spells[id]) missing.push(`weaponDeed spell ${id}`);
+      if (!C.deed(C.weaponDeeds[id])) missing.push(`weaponDeed ${C.weaponDeeds[id]}`);
+    }
     for (const id in C.enemies) if (!A.sprites[C.enemies[id].spr]) missing.push(`enemy ${id}`);
     for (const id in C.bosses) if (!A.sprites[C.bosses[id].spr]) missing.push(`boss ${id}`);
     for (const id in C.spells) if (!A.icons[C.spells[id].icon]) missing.push(`spell ${id}`);
@@ -597,6 +626,92 @@ async function main() {
     check('run plans vary between runs', stages.distinctPlans >= 5,
           `${stages.distinctPlans}/10 distinct`);
     check('every plan slot is filled', stages.planOk, '');
+  }
+
+  /* ---------- 5d. progression ----------
+     Deeds must actually gate, and actually open. Both directions
+     matter: a deed that never opens is a dead unlock, and one that
+     is open from the start is not progression at all.          */
+  errors.length = 0;
+  const prog = await page.evaluate(() => {
+    const C = W.Content;
+    const fresh = () => ({ kills: 0, best: 0, wins: 0, bestLevel: 0,
+                           essence: 0, bossKills: 0, evolutions: 0, chests: 0 });
+    const maxed = () => ({ kills: 99999, best: 9999, wins: 99, bestLevel: 99,
+                           essence: 99999, bossKills: 999, evolutions: 99, chests: 999 });
+    const zero = fresh(), full = maxed();
+
+    const openAt = (save) => ({
+      chars: C.chars.filter((c) => !C.lockReason(save, c.deed)).length,
+      stages: C.stages.filter((st) => !C.lockReason(save, st.deed)).length,
+      weapons: Object.keys(C.spells).filter((id) => C.weaponUnlocked(save, id)).length,
+      deeds: C.deeds.filter((d) => d.test(save)).length,
+    });
+
+    // Every deed must report progress text without throwing on a fresh save.
+    let progOk = true;
+    for (const d of C.deeds) {
+      const t = d.prog(zero);
+      if (typeof t !== 'string' || !t.length) progOk = false;
+    }
+    return {
+      start: openAt(zero), end: openAt(full),
+      total: { chars: C.chars.length, stages: C.stages.length,
+               weapons: Object.keys(C.spells).length, deeds: C.deeds.length },
+      progOk,
+    };
+  });
+  check('progression reads clean', errors.length === 0, errors[0] || '');
+  {
+    const a = prog.start, b = prog.end, tot = prog.total;
+    check('a fresh save starts gated',
+          a.chars < tot.chars && a.stages < tot.stages && a.weapons < tot.weapons,
+          `${a.chars}/${tot.chars} heroes, ${a.stages}/${tot.stages} stages, ${a.weapons}/${tot.weapons} weapons`);
+    check('a fresh save can still play',
+          a.chars >= 1 && a.stages >= 1 && a.weapons >= 4,
+          `${a.chars} heroes, ${a.weapons} weapons open`);
+    check('every deed is reachable',
+          b.chars === tot.chars && b.stages === tot.stages &&
+          b.weapons === tot.weapons && b.deeds === tot.deeds,
+          `all ${tot.deeds} deeds open everything`);
+    check('deeds report progress on a fresh save', prog.progOk, '');
+  }
+
+  /* ---------- 5e. every hero ----------
+     Each one starts with a different weapon and has to survive its
+     own opening minutes.                                        */
+  errors.length = 0;
+  const heroes = await page.evaluate(() => {
+    const G = W.Game;
+    const out = {};
+    for (const c of W.Content.chars) {
+      W.Save.data.curses = []; W.Save.data.meta = {};
+      window.__seed(0xBEEF11);
+      G.selectedStage = 'hollow'; G.selectedChar = c.id;
+      G.start(); window.__h.takeOver();
+      const p = G.player;
+      const startSpell = p.spells[0] && p.spells[0].id;
+      const r = window.__h.run(60 * 70);
+      out[c.id] = { start: startSpell, kills: r.kills, level: r.level,
+                    maxhp: p.maxhp, sprite: !!p.spr };
+    }
+    return out;
+  });
+  check('every hero runs clean', errors.length === 0, errors[0] || '');
+  {
+    const rows = Object.entries(heroes);
+    check('every hero has a sprite and a starting weapon',
+          rows.every(([id, r]) => r.sprite && r.start), '');
+    check('heroes start with different weapons',
+          new Set(rows.map(([, r]) => r.start)).size === rows.length,
+          `${new Set(rows.map(([, r]) => r.start)).size} distinct of ${rows.length}`);
+    check('every hero can fight',
+          rows.every(([, r]) => r.kills > 20), 
+          rows.map(([id, r]) => `${id}:${r.kills}`).join(' '));
+    check('hero health spreads meaningfully',
+          Math.max(...rows.map(([, r]) => r.maxhp)) >
+          Math.min(...rows.map(([, r]) => r.maxhp)) * 1.4,
+          `${Math.min(...rows.map(([, r]) => r.maxhp))}-${Math.max(...rows.map(([, r]) => r.maxhp))} HP`);
   }
 
   /* ---------- 6. UI surfaces ---------- */
