@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Hex &amp; Hollow — Arcane Survivors</title>
 <meta name="theme-color" content="#07060f">
-<meta name="description" content="A witches-and-wizards survivor bullet-hell you play in the browser.">
+<meta name="description" content="A dark-fantasy survivor bullet-hell you play in the browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='27' font-size='27'%3E%F0%9F%A7%99%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -55,6 +55,7 @@
         <button class="btn primary" id="btnPlay">Begin the Vigil</button>
         <button class="btn" id="btnCurses">Curses <em id="curseTag">none</em></button>
         <button class="btn" id="btnVault">The Coven Vault <em id="vaultGold">0 &#10022;</em></button>
+        <button class="btn" id="btnDeeds">Deeds <em id="deedTag">0/12</em></button>
         <button class="btn ghost" id="btnSettings">Settings</button>
         <button class="btn ghost" id="btnHelp">How to Play</button>
       </div>
@@ -85,6 +86,16 @@
         <button class="btn" id="btnCursesBack">Back</button>
         <button class="btn ghost" id="btnCursesClear">Lift All</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ DEEDS ============ -->
+  <div id="deeds" class="layer menu hidden">
+    <div class="menu-inner wide">
+      <h2>Deeds</h2>
+      <p class="subtitle" id="deedSub">Every unlock in the hollow hangs off one of these.</p>
+      <div class="vault-grid" id="deedGrid"></div>
+      <div class="menu-buttons"><button class="btn" id="btnDeedsBack">Back</button></div>
     </div>
   </div>
 
@@ -128,6 +139,7 @@
             <li>Survive <b>15:00</b> and the sun burns the hollow clean.</li>
             <li><b>Curses</b> make the night worse and pay more shards. Bind as many as you dare.</li>
             <li>Each <b>stage</b> tilts what comes for you, and shuffles the order every run.</li>
+            <li><b>Deeds</b> unlock heroes, weapons and stages. Check the list to see what is close.</li>
           </ul>
         </div>
       </div>

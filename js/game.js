@@ -35,6 +35,9 @@
       this.meteorPool = new W.Pool(() => new W.Meteor());
       this.novaPool = new W.Pool(() => new W.Nova());
       this.batPool = new W.Pool(() => new W.SpiritBat());
+      this.slashPool = new W.Pool(() => new W.Slash());
+      this.boomPool = new W.Pool(() => new W.Boomerang());
+      this.flaskPool = new W.Pool(() => new W.Flask());
       this.pickupPool = new W.Pool(() => new W.Pickup());
       this.bosses = [];
 
@@ -88,7 +91,7 @@
       const wrap = $('charSelect');
       wrap.innerHTML = '';
       for (const c of C.chars) {
-        const locked = c.lockedBy ? c.lockedBy(Save.data) : null;
+        const locked = C.lockReason(Save.data, c.deed);
         const el = document.createElement('div');
         el.className = 'char' + (locked ? ' locked' : '');
         const cv = document.createElement('canvas');
@@ -125,6 +128,7 @@
       $('vaultGold').textContent = Save.data.shards + ' ✦';
       $('curseTag').textContent = this.curseTag();
       this.buildStages();
+      $('deedTag').textContent = `${this.unlockedSet().size}/${C.deeds.length}`;
     },
 
     bindUI() {
@@ -133,6 +137,10 @@
       $('btnHelpBack').onclick = () => { $('help').classList.add('hidden'); $('title').classList.remove('hidden'); };
       $('btnVault').onclick = () => { this.openVault(); };
       $('btnCurses').onclick = () => { this.openCurses(); };
+      $('btnDeeds').onclick = () => { this.openDeeds(); };
+      $('btnDeedsBack').onclick = () => {
+        $('deeds').classList.add('hidden'); $('title').classList.remove('hidden'); this.buildMenu();
+      };
       $('btnSettings').onclick = () => {
         $('title').classList.add('hidden'); $('settings').classList.remove('hidden');
         this.renderSettings();
@@ -215,6 +223,46 @@
                        `These blessings persist across every run.`;
     },
 
+    /* ---------------- Deeds & unlocks ---------------- */
+    unlockedSet() {
+      const out = new Set();
+      for (const d of C.deeds) if (d.test(Save.data)) out.add(d.id);
+      return out;
+    },
+
+    openDeeds() {
+      $('title').classList.add('hidden');
+      $('deeds').classList.remove('hidden');
+      const grid = $('deedGrid');
+      grid.innerHTML = '';
+      // What each deed hands over, gathered so the screen can say so.
+      const rewards = {};
+      const add = (deed, what) => {
+        if (!deed) return;
+        (rewards[deed] = rewards[deed] || []).push(what);
+      };
+      for (const c of C.chars) add(c.deed, c.name);
+      for (const st of C.stages) add(st.deed, st.name);
+      for (const id in C.weaponDeeds) add(C.weaponDeeds[id], C.spells[id].name);
+
+      let done = 0;
+      for (const d of C.deeds) {
+        const ok = d.test(Save.data);
+        if (ok) done++;
+        const el = document.createElement('div');
+        el.className = 'vault-item deed' + (ok ? ' on' : '');
+        el.innerHTML =
+          `<div class="vname"><span>${d.name}</span>` +
+          `<span class="dmark">${ok ? '&#10003;' : d.prog(Save.data)}</span></div>` +
+          `<div class="vdesc">${d.desc}</div>` +
+          `<div class="dreward">${(rewards[d.id] || ['—']).join(' &middot; ')}</div>`;
+        grid.appendChild(el);
+      }
+      $('deedSub').innerHTML =
+        `<b style="color:var(--teal)">${done}</b> of ${C.deeds.length} deeds done. ` +
+        `Each one hands you something new.`;
+    },
+
     /* ---------------- Settings ---------------- */
     applySettings() {
       FX.shakeScale = this.settings.shake;
@@ -246,7 +294,7 @@
       wrap.innerHTML = '';
       let anyOpen = false;
       for (const st of C.stages) {
-        const locked = st.unlock ? st.unlock(Save.data) : null;
+        const locked = C.lockReason(Save.data, st.deed);
         const el = document.createElement('div');
         el.className = 'stage' + (locked ? ' locked' : '');
         el.innerHTML =
@@ -361,6 +409,7 @@
       this.enemyPool.clear(); this.bulletPool.clear(); this.boltPool.clear();
       this.zonePool.clear(); this.meteorPool.clear(); this.novaPool.clear();
       this.batPool.clear(); this.pickupPool.clear();
+      this.slashPool.clear(); this.boomPool.clear(); this.flaskPool.clear();
       this.bosses.length = 0;
       FX.reset();
 
@@ -373,6 +422,9 @@
       this.time = 0;
       this.kills = 0;
       this.shards = 0;
+      this.runBossKills = 0;
+      this.runEssence = 0;
+      this.runChests = 0;
       this.levelQueue = 0;
       this.eventIdx = 0;
       this.bossIdx = 0;
@@ -382,11 +434,13 @@
       this.bulletDmgMul = 1;
       this.activeBoss = null;
       this.victory = false;
+      this.hitstop = 0;
       this.pendingCards = null;
 
       $('title').classList.add('hidden');
       $('vault').classList.add('hidden');
       $('curses').classList.add('hidden');
+      $('deeds').classList.add('hidden');
       $('settings').classList.add('hidden');
       $('help').classList.add('hidden');
       $('over').classList.add('hidden');
@@ -427,6 +481,15 @@
 
     update(dt) {
       const p = this.player;
+      // Hit-stop. A boss death or a big detonation freezes the world for
+      // a few frames, which reads as impact far more cheaply than any
+      // amount of extra particles.
+      if (this.hitstop > 0) {
+        this.hitstop -= dt;
+        FX.update(dt * 0.25);
+        this.updateHUD();
+        return;
+      }
       this.time += dt;
 
       this.director(dt);
@@ -468,6 +531,9 @@
       this.tickPool(this.meteorPool, dt);
       this.tickPool(this.novaPool, dt);
       this.tickPool(this.batPool, dt);
+      this.tickPool(this.slashPool, dt);
+      this.tickPool(this.boomPool, dt);
+      this.tickPool(this.flaskPool, dt);
       this.tickPool(this.pickupPool, dt);
       this.enemyPool.sweep();
 
@@ -739,7 +805,12 @@
       }
       FX.ring(x, y, r * 0.25, r * 1.1, color, big ? 0.5 : 0.32, big ? 8 : 5);
       FX.burst(x, y, color, big ? 26 : 12, big ? 340 : 200, big ? 26 : 16);
-      if (big) { FX.smoke(x, y, 'shadow', 8); FX.kick(9); this.audio('boom'); }
+      if (big) {
+        FX.smoke(x, y, 'shadow', 8);
+        FX.kick(9);
+        this.hitstop = Math.max(this.hitstop, 0.045);
+        this.audio('boom');
+      }
     },
 
     spawnBolt(o) { this.boltPool.spawn().init(o); },
@@ -753,6 +824,9 @@
     spawnMeteor(o) { this.meteorPool.spawn().init(o); },
     spawnNova(o) { this.novaPool.spawn().init(o); FX.kick(5); },
     spawnBat(o) { this.batPool.spawn().init(o); },
+    spawnSlash(o) { this.slashPool.spawn().init(o); },
+    spawnBoomerang(o) { this.boomPool.spawn().init(o); },
+    spawnFlask(o) { this.flaskPool.spawn().init(o); },
 
     /* =====================================================
        ORBITALS — orbs, sigils, beams, siphon tethers
@@ -898,11 +972,15 @@
        ===================================================== */
     onEnemyKilled(e, opt) {
       this.kills++;
+      if (this.player.stat.lifesteal) this.player.heal(this.player.stat.lifesteal);
+      if (e.boss) this.runBossKills++;
       const color = e.boss ? e.def.color : 'blood';
+      FX.pop(e.x, e.y, e.spr, e.scaleV || 1, color, e.facing);
       FX.burst(e.x, e.y, color, e.boss ? 40 : 8, e.boss ? 420 : 170, e.boss ? 30 : 13);
       this.audio(e.boss ? 'boom' : 'kill');
 
       if (e.boss) {
+        this.hitstop = 0.16;
         FX.kick(24);
         FX.ring(e.x, e.y, 20, 520, e.def.color, 0.9, 12);
         this.spawnPickup('chest', e.x, e.y);
@@ -954,6 +1032,7 @@
       const d = pk.def, p = this.player;
       if (d.xp) {
         p.gainXp(d.xp * p.stat.xpBonus, this);
+        this.runEssence += d.xp;
         this.audio('pickup');
       }
       if (d.heal) { p.heal(d.heal); this.audio('heal'); }
@@ -980,6 +1059,7 @@
         this.banner('ALL SOULS RELEASED', '#ff8fa8');
       }
       if (d.chest) {
+        this.runChests++;
         this.audio('chest');
         this.shards += Math.round(25 * p.stat.shardBonus);
         this.levelQueue += 2;
@@ -1027,6 +1107,7 @@
         const newW = p.spells.length < 3 ? 13 : 5;
         for (const id in C.spells) {
           if (p.spells.some((s) => s.id === id)) continue;
+          if (!C.weaponUnlocked(Save.data, id)) continue;
           const def = C.spells[id];
           pool.push({ type: 'spell', id, def, name: def.name, desc: def.blurb,
                       icon: def.icon, tag: 'New Spell', weight: newW });
@@ -1110,6 +1191,8 @@
       else if (c.type === 'passive') p.addPassive(c.id);
       else if (c.type === 'evolve') {
         p.evolve(c.id);
+        Save.data.evolutions = (Save.data.evolutions || 0) + 1;
+        Save.save();
         this.banner(c.name.toUpperCase(), '#ffd479');
         FX.ring(p.x, p.y, 20, 340, 'ember', 0.8, 10);
       } else if (c.type === 'heal') {
@@ -1207,11 +1290,17 @@
       const base = this.shards + this.kills * 0.32 * this.player.stat.shardBonus;
       const earned = Math.round(base * (1 + this.curse.shardBonus));
       const s = Save.data;
+      const before = this.unlockedSet();
       s.shards += earned;
       s.kills += this.kills;
       s.best = Math.max(s.best, Math.floor(this.time));
+      s.bestLevel = Math.max(s.bestLevel || 0, this.player.level);
+      s.essence = (s.essence || 0) + this.runEssence;
+      s.bossKills = (s.bossKills || 0) + this.runBossKills;
+      s.chests = (s.chests || 0) + this.runChests;
       if (won) s.wins++;
       Save.save();
+      this.newlyEarned = [...this.unlockedSet()].filter((d) => !before.has(d));
 
       if (!abandoned) this.audio(won ? 'win' : 'death');
 
@@ -1222,6 +1311,8 @@
         : abandoned ? `You slip out of ${where}. The shards are yours to keep.`
         : `${where} took you at ${fmtTime(this.time)}. The night goes on without you.`;
 
+      const stale = $('unlockBanner');
+      if (stale) stale.remove();
       const bound = this.activeCurses();
       $('results').innerHTML =
         res(fmtTime(this.time), 'Survived') +
@@ -1232,6 +1323,15 @@
           ? `<div class="res curse"><div class="rv">+${Math.round(this.curse.shardBonus * 100)}%</div>` +
             `<div class="rk">${bound.length} Curse${bound.length > 1 ? 's' : ''}</div></div>`
           : res(fmtTime(s.best), 'Best Ever'));
+
+      if (this.newlyEarned.length) {
+        const names = this.newlyEarned.map((id) => C.deed(id).name).join(' &middot; ');
+        $('results').insertAdjacentHTML('afterend',
+          `<div class="unlock-banner" id="unlockBanner">Deed earned &mdash; <b>${names}</b></div>`);
+      } else {
+        const old = $('unlockBanner');
+        if (old) old.remove();
+      }
 
       $('over').classList.remove('hidden');
       $('touch').classList.add('hidden');
@@ -1327,6 +1427,24 @@
       g.fillStyle = this.groundPattern;
       g.fillRect(camX, camY, w, h);
 
+      // Stage ambience — slow motes drifting through the level. Purely
+      // decorative, driven off the clock so they cost no state.
+      if (FX.quality > 0.5) {
+        const mote = this.stage.mote || 'arcane';
+        const now = this.time;
+        g.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 22; i++) {
+          const seed = i * 127.3;
+          const sp = 8 + (i % 5) * 4;
+          const mx = camX + ((seed * 7.7 + now * sp) % (w + 160)) - 80;
+          const my = camY + ((seed * 13.1 + now * (sp * 0.6)) % (h + 160)) - 80;
+          Art.glow(g, mote, mx, my + Math.sin(now * 0.7 + i) * 14,
+                   9 + (i % 3) * 5, 0.16 + (i % 3) * 0.05);
+        }
+        g.globalAlpha = 1;
+        g.globalCompositeOperation = 'source-over';
+      }
+
       // Pools of light so the floor isn't uniformly flat
       g.globalCompositeOperation = 'lighter';
       const t = this.time;
@@ -1359,7 +1477,10 @@
 
       this.drawBeams(g);
       this.drawPool(g, this.batPool);
+      this.drawPool(g, this.boomPool);
+      this.drawPool(g, this.flaskPool);
       this.player.draw(g);
+      this.drawPool(g, this.slashPool);
       this.drawOrbitals(g);
       this.drawSiphon(g);
 

@@ -43,7 +43,58 @@
       spr: 'wiz_hedge', start: 'cauldron', hp: 112,
       mods: { regen: 0.7, pickup: 0.3 },
       modText: '+0.7 HP/s, +30% pickup range',
-      lockedBy: (save) => (save.kills >= 600 ? null : `Slay 600 foes in total (${save.kills}/600)`),
+      deed: 'blooded',
+    },
+
+    /* ---- The wider cast. Word got out; the hollow draws more
+            than witches now. ---- */
+    {
+      id: 'battlemage', name: 'Sir Aldric Vane', title: 'Battle Mage',
+      desc: 'Trained to cast in armour, which the academy thought was cheating. Starts with Runeblade.',
+      spr: 'wiz_battlemage', start: 'runeblade', hp: 132,
+      mods: { damage: 0.08, speed: -0.04 },
+      modText: '+8% damage, heavy plate',
+      deed: 'steel',
+    },
+    {
+      id: 'warden', name: 'Rowan Ash', title: 'Forest Warden',
+      desc: 'Counts every arrow and every debt. Starts with Thorn Volley.',
+      spr: 'wiz_warden', start: 'thornvolley', hp: 104,
+      mods: { pickup: 0.45, area: 0.1 },
+      modText: '+45% pickup range, +10% area',
+      deed: 'forager',
+    },
+    {
+      id: 'knight', name: 'Dame Ysolde', title: 'Oath Knight',
+      desc: 'Slow, immovable, and entirely out of patience. Starts with Warhammer.',
+      spr: 'wiz_knight', start: 'hammer', hp: 176,
+      mods: { speed: -0.12, dr: 0.1 },
+      modText: 'Heaviest armour, slowest step',
+      deed: 'unbroken',
+    },
+    {
+      id: 'werewolf', name: 'Fenn', title: 'The Turned',
+      desc: 'Fast, starving, and only mostly in control. Starts with Rending Claws.',
+      spr: 'wiz_werewolf', start: 'claws', hp: 96,
+      mods: { speed: 0.22, regen: 0.4 },
+      modText: '+22% speed, knits closed fast',
+      deed: 'moonlit',
+    },
+    {
+      id: 'vampire', name: 'Countess Ilka', title: 'The Undying',
+      desc: 'Takes what she needs and calls it hospitality. Starts with Crimson Rite.',
+      spr: 'wiz_vampire', start: 'bloodbolt', hp: 92,
+      mods: { damage: 0.12, lifesteal: 1 },
+      modText: '+12% damage, drinks from every kill',
+      deed: 'sanguine',
+    },
+    {
+      id: 'alchemist', name: 'Doctor Quill', title: 'Plague Alchemist',
+      desc: 'Believes most problems dissolve, given the right solvent. Starts with the Flask.',
+      spr: 'wiz_alchemist', start: 'flask', hp: 108,
+      mods: { area: 0.18, cdr: 0.06 },
+      modText: '+18% spell size, +6% cast rate',
+      deed: 'reagent',
     },
   ];
 
@@ -334,6 +385,197 @@
                      s.spin, s.dmg, sp.level >= 8 || sp.evolved);
       },
     },
+
+    /* ---- Steel and blood: the wider cast's arsenal ---- */
+
+    runeblade: {
+      name: 'Runeblade', icon: 'runeblade', color: 'arcane',
+      blurb: 'Sweeps a rune-lit blade through everything in front of you.',
+      up: ['Sweeps a rune-lit blade through everything in front of you.',
+           '+damage', 'Wider arc', '+reach, faster', '+damage',
+           'Wider arc, second sweep', 'Faster', 'The sweep comes full circle'],
+      t: {
+        dmg:  [46, 60, 76, 96, 122, 154, 194, 250],
+        cd:   [1.05, 1.0, 0.92, 0.82, 0.76, 0.68, 0.60, 0.54],
+        rad:  [92, 96, 104, 118, 124, 132, 140, 150],
+        arc:  [1.5, 1.6, 1.9, 2.0, 2.2, 2.5, 2.7, 6.28],
+      },
+      evo: { req: 'grimoire', name: 'Duskcleaver',
+             desc: 'Every sweep is a full circle, and it cuts the air behind it too.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const base = g.nearestEnemy(p.x, p.y, 500);
+        const aim = base ? Math.atan2(base.y - p.y, base.x - p.x) : p.facingAngle;
+        const sweeps = (sp.level >= 6 ? 2 : 1) + (sp.evolved ? 1 : 0);
+        for (let i = 0; i < sweeps; i++) {
+          g.spawnSlash({
+            owner: p, a: aim + (i ? Math.PI : 0), arc: sp.evolved ? 6.28 : s.arc,
+            r: s.rad * p.stat.area, dmg: s.dmg, color: 'arcane',
+            spin: sp.evolved ? 6 : 2.2, life: 0.24, src: sp,
+          });
+        }
+        g.audio('zap');
+      },
+    },
+
+    thornvolley: {
+      name: 'Thorn Volley', icon: 'thornvolley', color: 'life',
+      blurb: 'Looses a fan of barbed arrows that punch through ranks.',
+      up: ['Looses a fan of barbed arrows that punch through ranks.',
+           '+1 arrow', '+damage', '+1 arrow, deeper pierce', 'Faster draw',
+           '+1 arrow', '+damage, deeper pierce', 'Arrows split on impact'],
+      t: {
+        dmg:    [30, 38, 50, 62, 78, 98, 124, 158],
+        cd:     [1.15, 1.08, 1.0, 0.9, 0.8, 0.74, 0.66, 0.58],
+        count:  [3, 4, 4, 5, 5, 6, 6, 7],
+        pierce: [1, 1, 2, 3, 3, 3, 4, 5],
+      },
+      evo: { req: 'ring', name: 'Hunter\u2019s Mercy',
+             desc: 'A full ring of arrows, every one of them barbed.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const n = s.count + p.stat.projectiles;
+        const base = g.nearestEnemy(p.x, p.y, 900);
+        const aim = base ? Math.atan2(base.y - p.y, base.x - p.x) : p.facingAngle;
+        for (let i = 0; i < n; i++) {
+          const a = sp.evolved
+            ? (i / n) * TAU
+            : aim + (i - (n - 1) / 2) * 0.14;
+          g.spawnBolt({
+            x: p.x, y: p.y, a, speed: 620, dmg: s.dmg, pierce: s.pierce,
+            r: 8, glow: 'life', life: 1.5, trail: 'life',
+            burst: sp.level >= 8 ? { r: 48 * p.stat.area, dmg: s.dmg * 0.5 } : null,
+            src: sp,
+          });
+        }
+        g.audio('shoot');
+      },
+    },
+
+    hammer: {
+      name: 'Warhammer', icon: 'hammer', color: 'frost',
+      blurb: 'Hurls a hammer that batters its way out and back again.',
+      up: ['Hurls a hammer that batters its way out and back again.',
+           '+damage', 'Flies further', '+1 hammer', '+damage',
+           'Flies further, faster', '+1 hammer', 'Hammers shatter the ground where they turn'],
+      t: {
+        dmg:   [54, 70, 90, 114, 145, 182, 230, 292],
+        cd:    [1.7, 1.6, 1.5, 1.35, 1.22, 1.1, 1.0, 0.9],
+        count: [1, 1, 1, 2, 2, 2, 3, 3],
+        life:  [1.9, 2.0, 2.3, 2.4, 2.5, 2.8, 3.0, 3.2],
+      },
+      evo: { req: 'ward_p', name: 'Mjolnir\u2019s Echo',
+             desc: 'Four hammers, and each turning point cracks the earth.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const n = s.count + p.stat.projectiles + (sp.evolved ? 1 : 0);
+        const base = g.nearestEnemy(p.x, p.y, 700);
+        const aim = base ? Math.atan2(base.y - p.y, base.x - p.x) : p.facingAngle;
+        for (let i = 0; i < n; i++) {
+          g.spawnBoomerang({
+            owner: p, x: p.x, y: p.y,
+            a: aim + (i - (n - 1) / 2) * 0.5,
+            speed: 560, dmg: s.dmg, life: s.life,
+            r: 18 * p.stat.area, color: 'frost', src: sp,
+          });
+        }
+        g.audio('shoot');
+      },
+    },
+
+    claws: {
+      name: 'Rending Claws', icon: 'claws', color: 'blood',
+      blurb: 'Tears at everything within arm\u2019s reach, and drinks what it opens.',
+      up: ['Tears at everything within arm\u2019s reach, and drinks what it opens.',
+           '+damage', 'Longer reach', 'Faster, +healing', '+damage',
+           'Longer reach', 'Faster', 'Every rake is a full circle'],
+      t: {
+        dmg:  [26, 34, 44, 56, 72, 92, 118, 152],
+        cd:   [0.62, 0.58, 0.54, 0.46, 0.42, 0.38, 0.33, 0.29],
+        rad:  [74, 78, 88, 92, 98, 108, 114, 122],
+        leech:[0.4, 0.5, 0.6, 0.9, 1.0, 1.2, 1.4, 1.8],
+      },
+      evo: { req: 'moonstone', name: 'Moon\u2019s Hunger',
+             desc: 'The beast takes over. Full circles, and far deeper draughts.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const base = g.nearestEnemy(p.x, p.y, 400);
+        const aim = base ? Math.atan2(base.y - p.y, base.x - p.x) : p.facingAngle;
+        g.spawnSlash({
+          owner: p, a: aim, arc: sp.level >= 8 || sp.evolved ? 6.28 : 1.9,
+          r: s.rad * p.stat.area, dmg: s.dmg, color: 'blood',
+          leech: s.leech * (sp.evolved ? 2 : 1), knock: 120,
+          spin: 3, life: 0.18, src: sp,
+        });
+        g.audio('hit');
+      },
+    },
+
+    bloodbolt: {
+      name: 'Crimson Rite', icon: 'bloodbolt', color: 'blood',
+      blurb: 'Flings a clot of stolen blood. What it takes, you keep.',
+      up: ['Flings a clot of stolen blood. What it takes, you keep.',
+           '+damage', '+1 bolt', '+healing', '+damage',
+           '+1 bolt, pierces', 'Faster', 'Bolts burst into a red mist'],
+      t: {
+        dmg:    [38, 50, 64, 82, 104, 132, 168, 214],
+        cd:     [1.1, 1.02, 0.95, 0.86, 0.78, 0.70, 0.62, 0.55],
+        count:  [1, 1, 2, 2, 2, 3, 3, 4],
+        pierce: [0, 0, 0, 1, 1, 2, 2, 3],
+        leech:  [0.6, 0.7, 0.8, 1.2, 1.3, 1.5, 1.8, 2.2],
+      },
+      evo: { req: 'amulet', name: 'Sanguine Choir',
+             desc: 'The mist lingers, and everything caught in it feeds you.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const n = s.count + p.stat.projectiles;
+        const base = g.nearestEnemy(p.x, p.y, 900);
+        const aim = base ? Math.atan2(base.y - p.y, base.x - p.x) : p.facingAngle;
+        for (let i = 0; i < n; i++) {
+          g.spawnBolt({
+            x: p.x, y: p.y, a: aim + (i - (n - 1) / 2) * 0.18,
+            speed: 500, dmg: s.dmg, pierce: s.pierce,
+            r: 11, glow: 'blood', life: 1.6, trail: 'blood',
+            leech: s.leech * (sp.evolved ? 1.8 : 1),
+            burst: sp.level >= 8 || sp.evolved
+              ? { r: 70 * p.stat.area, dmg: s.dmg * 0.55 } : null,
+            src: sp,
+          });
+        }
+        g.audio('fire');
+      },
+    },
+
+    flask: {
+      name: 'Alchemist\u2019s Flask', icon: 'flask', color: 'toxic',
+      blurb: 'Lobs a bottle that breaks into a corrosive pool.',
+      up: ['Lobs a bottle that breaks into a corrosive pool.',
+           '+damage', 'Bigger break', '+1 flask', 'Pools last longer',
+           '+damage', '+1 flask', 'The pool spits smaller flasks of its own'],
+      t: {
+        dmg:   [56, 72, 92, 116, 148, 186, 236, 300],
+        cd:    [2.0, 1.9, 1.8, 1.65, 1.5, 1.35, 1.2, 1.05],
+        rad:   [78, 82, 94, 98, 104, 114, 122, 132],
+        count: [1, 1, 1, 2, 2, 2, 3, 3],
+        dur:   [3.0, 3.2, 3.4, 3.6, 4.4, 4.6, 4.8, 5.4],
+      },
+      evo: { req: 'lens', name: 'Cascade',
+             desc: 'Each break throws two more. It does not really stop.' },
+      cast(g, p, sp) {
+        const s = C.stats(p, sp);
+        const n = s.count + p.stat.projectiles + (sp.evolved ? 2 : 0);
+        for (let i = 0; i < n; i++) {
+          const tgt = g.randomEnemyNear(p.x, p.y, 560) ||
+                      { x: p.x + rand(-260, 260), y: p.y + rand(-260, 260) };
+          g.spawnFlask({
+            x: p.x, y: p.y, tx: tgt.x + rand(-30, 30), ty: tgt.y + rand(-30, 30),
+            dmg: s.dmg, r: s.rad * p.stat.area, dps: s.dmg * 0.3,
+            zoneDur: s.dur, color: 'toxic', src: sp,
+          });
+        }
+        g.audio('shoot');
+      },
+    },
   };
 
   // Stamp ids and slot type onto each definition.
@@ -550,6 +792,66 @@
   C.RUN_LENGTH = 900;   // 15:00 — survive to see dawn
 
   /* =========================================================
+     DEEDS — the progression spine.
+
+     Every unlock in the game hangs off one of these: heroes,
+     weapons and stages all name a deed, and a deed is just a
+     predicate over the save file plus a line of progress text.
+     Keeping them in one table means the Deeds screen can show
+     what is left without each system inventing its own copy.
+     ========================================================= */
+  const pct = (have, need) => `${Math.min(have, need)}/${need}`;
+
+  C.deeds = [
+    { id: 'blooded',  name: 'Blooded',        desc: 'Slay 600 foes in total.',
+      test: (s) => s.kills >= 600,        prog: (s) => pct(s.kills, 600) },
+    { id: 'steel',    name: 'Tempered Steel', desc: 'Reach level 20 in a single run.',
+      test: (s) => (s.bestLevel || 0) >= 20, prog: (s) => pct(s.bestLevel || 0, 20) },
+    { id: 'forager',  name: 'Forager',        desc: 'Gather 4000 essence in total.',
+      test: (s) => (s.essence || 0) >= 4000, prog: (s) => pct(s.essence || 0, 4000) },
+    { id: 'unbroken', name: 'Unbroken',       desc: 'Survive 8 minutes in a single run.',
+      test: (s) => (s.best || 0) >= 480,  prog: (s) => `${Math.floor((s.best || 0) / 60)}/8 min` },
+    { id: 'moonlit',  name: 'Moonlit',        desc: 'Slay 12 Wardens.',
+      test: (s) => (s.bossKills || 0) >= 12, prog: (s) => pct(s.bossKills || 0, 12) },
+    { id: 'sanguine', name: 'Sanguine',       desc: 'Evolve any weapon.',
+      test: (s) => (s.evolutions || 0) >= 1, prog: (s) => pct(s.evolutions || 0, 1) },
+    { id: 'reagent',  name: 'Reagent',        desc: 'Open 15 chests.',
+      test: (s) => (s.chests || 0) >= 15, prog: (s) => pct(s.chests || 0, 15) },
+    { id: 'dawn',     name: 'First Dawn',     desc: 'Survive one night to the dawn.',
+      test: (s) => (s.wins || 0) >= 1,    prog: (s) => pct(s.wins || 0, 1) },
+    { id: 'legion',   name: 'Legion',         desc: 'Slay 3000 foes in total.',
+      test: (s) => s.kills >= 3000,       prog: (s) => pct(s.kills, 3000) },
+    { id: 'arsenal',  name: 'Arsenal',        desc: 'Reach level 12 in a single run.',
+      test: (s) => (s.bestLevel || 0) >= 12, prog: (s) => pct(s.bestLevel || 0, 12) },
+    { id: 'hunter',   name: 'Hunter',         desc: 'Slay 4 Wardens.',
+      test: (s) => (s.bossKills || 0) >= 4, prog: (s) => pct(s.bossKills || 0, 4) },
+    { id: 'ruin',     name: 'Ruin',           desc: 'Reach 6 minutes in a single run.',
+      test: (s) => (s.best || 0) >= 360,  prog: (s) => `${Math.floor((s.best || 0) / 60)}/6 min` },
+  ];
+
+  C.deed = (id) => C.deeds.find((d) => d.id === id);
+  C.deedDone = (save, id) => {
+    if (!id) return true;                       // no deed named = always open
+    const d = C.deed(id);
+    return d ? !!d.test(save) : true;
+  };
+  /** Locked-reason string, or null when it is available. */
+  C.lockReason = function (save, id) {
+    if (C.deedDone(save, id)) return null;
+    const d = C.deed(id);
+    return `${d.desc} (${d.prog(save)})`;
+  };
+
+  /** Weapons that must be earned. Anything unlisted is open from the start. */
+  C.weaponDeeds = {
+    starfall: 'arsenal', siphon: 'hunter', ward: 'ruin',
+    runeblade: 'steel', thornvolley: 'forager', hammer: 'unbroken',
+    claws: 'moonlit', bloodbolt: 'sanguine', flask: 'reagent',
+  };
+
+  C.weaponUnlocked = (save, id) => C.deedDone(save, C.weaponDeeds[id]);
+
+  /* =========================================================
      STAGES — where the vigil is held.
 
      A stage re-colours the ground, tilts the spawn table toward a
@@ -565,6 +867,7 @@
       ground: null,                              // the default palette
       weights: {},                               // no tilt
       mods: { spawn: 1, hp: 1, spd: 1 },
+      mote: 'arcane',
       bosses: ['matriarch', 'lich', 'gorgon', 'devourer'],
       swarms: ['imp', 'bat', 'skeleton', 'slime', 'cultist', 'batRed', 'wraith', 'gargoyle'],
     },
@@ -581,9 +884,10 @@
                  wisp: 2.4, wispRed: 2.4, imp: 0.5, bat: 0.6, batRed: 0.6,
                  slime: 0.7, gargoyle: 0.6 },
       mods: { spawn: 0.82, hp: 1.0, spd: 0.95 },
+      mote: 'ice',
       bosses: ['lich', 'gorgon', 'lich', 'devourer'],
       swarms: ['skeleton', 'cultist', 'wisp', 'skeleton2', 'cultist2', 'wispRed'],
-      unlock: (s) => (s.wins >= 1 ? null : 'Survive one night to the dawn'),
+      deed: 'dawn',
     },
     {
       id: 'waste', name: 'The Ashen Waste', title: 'They come running',
@@ -599,9 +903,10 @@
                  skeleton: 0.35, skeleton2: 0.35, cultist: 0.4, cultist2: 0.4,
                  wisp: 0.3, wispRed: 0.3 },
       mods: { spawn: 1.35, hp: 1.0, spd: 1.1 },
+      mote: 'ember',
       bosses: ['matriarch', 'devourer', 'matriarch', 'gorgon'],
       swarms: ['imp', 'bat', 'batRed', 'wraith', 'impBlue', 'slime', 'impGreen'],
-      unlock: (s) => (s.kills >= 3000 ? null : `Slay 3000 foes in total (${s.kills}/3000)`),
+      deed: 'legion',
     },
   ];
 

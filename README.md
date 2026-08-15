@@ -1,8 +1,11 @@
 # Hex & Hollow — Arcane Survivors
 
-A witches-and-wizards **survivor bullet-hell** that runs entirely in the browser.
-You move; your spells cast themselves. Hold out against the hollow for fifteen
-minutes and the sun does the rest.
+A dark-fantasy **survivor bullet-hell** that runs entirely in the browser. You
+move; your weapons swing and cast themselves. Hold out against the hollow for
+fifteen minutes and the sun does the rest.
+
+It started with witches. Ten hold the vigil now — battle mages, wardens,
+knights, a werewolf and a vampire among them.
 
 ## Play
 
@@ -48,11 +51,11 @@ Where you hold the vigil changes what holds it against you. Within a stage the
 swarm creatures and the Warden order are **shuffled every run**, so the beats
 stay authored while the cast varies.
 
-| Stage | Character | Unlock |
+| Stage | Character | Deed |
 | --- | --- | --- |
 | **The Hollow** | Everything in fair measure | open |
-| **The Drowned Chapel** | Casters and archers; fewer bodies, far more spellfire | survive one night |
-| **The Ashen Waste** | Fast melee, almost no spellfire, and it never stops | 3000 lifetime kills |
+| **The Drowned Chapel** | Casters and archers; fewer bodies, far more spellfire | First Dawn |
+| **The Ashen Waste** | Fast melee, almost no spellfire, and it never stops | Legion |
 
 Each stage re-colours the ground, applies per-enemy weight multipliers over the
 base spawn table, tilts crowd size and speed, and picks which Wardens turn up.
@@ -99,16 +102,46 @@ everyone. Single runs could not measure this: changing one parameter sends the
 seeded run down a different build, so per-setting means over five seeds were
 needed to see the trend at all.
 
-## Characters
+## The cast
 
-| | Starts with | Bonus |
-| --- | --- | --- |
-| **Elara Ashthorn**, Emberwitch | Firebolt | +15% spell damage |
-| **Morwenna Rime**, Frostwarden | Frost Nova | +22% spell area, sturdier |
-| **Zephyr Vance**, Stormcaller | Chain Lightning | +14% speed, +10% cast rate |
-| **Bramble Hex**, Hedge-Witch | Bubbling Cauldron | +0.7 HP/s, +30% pickup range |
+Word got out. The hollow draws more than witches now.
 
-Bramble unlocks at 600 lifetime kills.
+| | Starts with | Bonus | Deed |
+| --- | --- | --- | --- |
+| **Elara Ashthorn**, Emberwitch | Firebolt | +15% spell damage | open |
+| **Morwenna Rime**, Frostwarden | Frost Nova | +22% area, sturdier | open |
+| **Zephyr Vance**, Stormcaller | Chain Lightning | +14% speed, +10% cast rate | open |
+| **Bramble Hex**, Hedge-Witch | Bubbling Cauldron | +0.7 HP/s, +30% pickup | Blooded |
+| **Sir Aldric Vane**, Battle Mage | Runeblade | +8% damage, heavy plate | Tempered Steel |
+| **Rowan Ash**, Forest Warden | Thorn Volley | +45% pickup, +10% area | Forager |
+| **Dame Ysolde**, Oath Knight | Warhammer | 176 HP, slowest step | Unbroken |
+| **Fenn**, The Turned | Rending Claws | +22% speed, fast regen | Moonlit |
+| **Countess Ilka**, The Undying | Crimson Rite | +12% damage, drinks from every kill | Sanguine |
+| **Doctor Quill**, Plague Alchemist | Alchemist's Flask | +18% area, +6% cast rate | Reagent |
+
+Health runs 92 to 176 across the cast, and each opens with a different weapon.
+
+## Progression
+
+Every unlock hangs off a **deed** — a named goal with a progress readout.
+Heroes, weapons and stages all name one, so there is a single screen showing
+what is left and what it hands over.
+
+A fresh save opens with 3 heroes, 1 stage and 7 of the 16 weapons; the other 9
+weapons are earned. Deeds track lifetime kills, best level, best time, essence
+gathered, Wardens slain, evolutions and chests opened.
+
+## Weapons
+
+Sixteen, each with eight ranks and an evolution.
+
+**Spells** — Firebolt, Frost Nova, Chain Lightning, Arcane Orbs, Bubbling
+Cauldron, Spirit Bats, Runic Beam, Starfall, Soul Siphon, Warding Sigil.
+
+**Steel and blood** — Runeblade (a sweeping arc that becomes a full circle),
+Thorn Volley (piercing fan), Warhammer (thrown, and it comes back), Rending
+Claws (short, fast, and it drinks), Crimson Rite (bolts that heal what they
+take), Alchemist's Flask (lobbed, breaks into a pool).
 
 ## About the assets
 
@@ -125,7 +158,7 @@ index.html          shell + every UI overlay
 css/style.css
 js/core.js          math, pooling, spatial hash, input, audio synthesis, save
 js/art.js           pixel maps, sprite/glow/ground/icon generation
-js/content.js       characters, spells, passives, enemies, bosses, vault
+js/content.js       heroes, weapons, charms, enemies, bosses, deeds, stages, curses, vault
 js/entities.js      player, enemies, bosses, projectiles, particles
 js/game.js          main loop, spawn director, rendering, UI
 ```
@@ -163,8 +196,13 @@ It covers: boot and asset generation; self-verified determinism; that every
 sprite, icon, spawn-table and evolution reference in `content.js` actually
 resolves; a four-minute run with a kiting bot; far-enemy recycling; a full
 15-minute *pacifist* run (no spells at all — the case that once spiralled);
-every spell in its evolved form; every enemy AI branch and boss attack pattern;
-every curse; every stage; and each UI surface.
+every weapon in its evolved form; every enemy AI branch and boss attack pattern;
+every curse; every stage; every hero; the progression gates; and each UI surface.
+
+Progression is checked in both directions — a fresh save must leave heroes,
+stages and weapons locked, and a maxed save must open every one of them. A gate
+that never opens is a dead unlock; a gate that is open from the start is not
+progression.
 
 Stages are checked for identity rather than existence: the Chapel must actually
 field proportionally more ranged enemies than the Hollow, the Waste must crowd
